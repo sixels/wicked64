@@ -1,0 +1,10 @@
+[package]
+name = "wicked64"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[workspace]
+members = ["wicked64-core", "wicked64-arena"]
