@@ -4,7 +4,6 @@ pub mod codegen;
 use std::ops::DerefMut;
 
 use byteorder::{BigEndian, WriteBytesExt};
-use wasmer::{Function, Instance, Pages};
 
 use crate::{cpu::instruction::Instruction, n64::SyncState};
 
