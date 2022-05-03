@@ -383,8 +383,6 @@ mod tests {
     fn pif_behavior() {
         crate::tests::init_trace();
 
-        wicked64_arena::init_arena(50 * 1024 * 1024); // 50 mb
-
         let mut mmu = {
             let cartridge = Cartridge::open("../assets/test-roms/dillonb/basic.z64").unwrap();
             MemoryManager::new(cartridge)

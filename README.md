@@ -1,6 +1,6 @@
 # Wicked64
 
-Wicked64 is a Nintendo64 emulator written in Rust that generates wasm code
+Wicked64 is a Nintendo64 emulator using dynamic recompilation.
 
 ## Resources
 

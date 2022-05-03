@@ -2,7 +2,6 @@ use std::{path::Path, sync::Arc};
 
 use byteorder::BigEndian;
 use parking_lot::Mutex;
-use wicked64_arena::ArenaBox;
 
 use crate::{cpu::Cpu, hardware::Cartridge, jit::cache::Cache, mmu::MemoryManager};
 
@@ -59,7 +58,7 @@ impl N64 {
 
 pub struct State {
     pub mmu: MemoryManager,
-    pub cpu: ArenaBox<Cpu<BigEndian>>,
+    pub cpu: Cpu<BigEndian>,
     pub cache: Arc<Cache>,
 }
 
@@ -67,7 +66,7 @@ impl State {
     pub fn new(mmu: MemoryManager, cpu: Cpu<BigEndian>, cache: Arc<Cache>) -> Self {
         Self {
             mmu,
-            cpu: ArenaBox::new(cpu),
+            cpu,
             cache,
         }
     }
@@ -76,7 +75,6 @@ impl State {
 #[cfg(test)]
 mod tests {
     use byteorder::{BigEndian, ByteOrder};
-    use wicked64_arena::init_arena;
 
     use crate::mmu::MemoryUnit;
 
@@ -100,7 +98,6 @@ mod tests {
     #[test]
     fn dillon_basic() {
         crate::tests::init_trace();
-        init_arena(SMALL_ARENA_SIZE_IN_BYTES);
 
         let mut n64 = N64::new("../assets/test-roms/dillonb/basic.z64").unwrap();
         skip_boot_process::<BigEndian>(&n64);
