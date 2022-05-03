@@ -1,0 +1,15 @@
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("Your CPU does not supports 64-bit integers");
+
+pub mod cpu;
+pub mod hardware;
+pub mod jit;
+pub mod mmu;
+pub mod n64;
+
+#[cfg(test)]
+mod tests {
+    pub(crate) fn init_trace() {
+        tracing_subscriber::fmt::init();
+    }
+}

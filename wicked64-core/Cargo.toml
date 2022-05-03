@@ -1,0 +1,28 @@
+[package]
+name = "wicked64-core"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wicked64-arena = { path = "../wicked64-arena" }
+wasmer = { version = "2.2.1", default-features = false, features = [
+    "sys",
+    "default-universal",
+    "singlepass",
+] }
+
+byteorder = "1.4.3"
+bitvec = "1.0.0"
+once_cell = "1.10.0"
+hashbrown = "0.12.0"
+num_enum = "0.5.7"
+parking_lot = "0.12.0"
+
+anyhow = "1.0.56"
+tracing = { version = "0.1.33", default-features = false, features = ["std"] }
+
+
+[dev-dependencies]
+tracing-subscriber = "0.3.11"
