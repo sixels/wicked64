@@ -71,24 +71,15 @@ impl<T> RangeMap<T> {
     }
 }
 
-/// Unfortunately, Rust [does not let we match const ranges](https://github.com/rust-lang/rust/issues/76191)
-/// like this:
-/// ```no_run
-/// // does not compile
-/// match addr {
-///     PHYS_RESERVED_RANGE => Self::Reserved,
-///     /* snip */
-/// }
-/// ```
-/// This macro provides an **inefficient** workaround to keep things simple,
-/// but apparently it will be optimized on release builds
-/// (https://godbolt.org/z/7naWYqjf9).
 macro_rules! map_range {
-    ($addr:expr, { $( $range:expr => $value:expr , )* _ => $exhaust:expr } ) => {
-        match $addr {
-            $( i if $range.contains(&i) => $value, )*
-            _ => $exhaust
-        }
+    ($( $range:expr => $value:expr , )* ) => {{
+        let mut map = RangeMap::new();
+
+        $( map.insert_range_unchecked($range, $value); )*
+
+        map
+    }};
+}
     };
 }
 
