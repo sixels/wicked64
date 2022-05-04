@@ -140,39 +140,7 @@ static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
     }
 });
 
-static PHYS_MAP: Lazy<RangeMap<(PhysicalMemoryMap, usize)>> = Lazy::new(|| {
-    use addr_map::phys;
 
-    map_range_tup! {
-        phys::RDRAM_RANGE => PhysicalMemoryMap::RDRAM,
-        phys::RDRAM_REG_RANGE => PhysicalMemoryMap::RDRAMReg,
-        phys::SP_DMEM_RANGE => PhysicalMemoryMap::SPDMEM,
-        phys::SP_IMEM_RANGE => PhysicalMemoryMap::SPIMEM,
-        phys::SP_REG_RANGE => PhysicalMemoryMap::SPReg,
-        phys::DP_CMD_REG_RANGE => PhysicalMemoryMap::DPCmdReg,
-        phys::DP_SPAN_REG_RANGE => PhysicalMemoryMap::DPSpanReg,
-        phys::MIPS_INT_RANGE => PhysicalMemoryMap::MIPSInterface,
-        phys::VIDEO_INT_RANGE => PhysicalMemoryMap::VideoInterface,
-        phys::AUDIO_INT_RANGE => PhysicalMemoryMap::AudioInterface,
-        phys::PERIPHERAL_INT_RANGE => PhysicalMemoryMap::PeripheralInterface,
-        phys::RDRAM_INT_RANGE => PhysicalMemoryMap::RDRAMInterface,
-        phys::SERIAL_INT_RANGE => PhysicalMemoryMap::SerialInterface,
-        phys::CART_D2A1_RANGE => PhysicalMemoryMap::CartridgeD2A1,
-        phys::CART_D1A1_RANGE => PhysicalMemoryMap::CartridgeD1A1,
-        phys::CART_D2A2_RANGE => PhysicalMemoryMap::CartridgeD2A2,
-        phys::CART_D1A2_RANGE => PhysicalMemoryMap::CartridgeD1A2,
-        phys::PIF_ROM_RANGE => PhysicalMemoryMap::PIFROM,
-        phys::PIF_RAM_RANGE => PhysicalMemoryMap::PIFRAM,
-        phys::RESERVED_RANGE => PhysicalMemoryMap::Reserved,
-        phys::CART_D1A3_RANGE => PhysicalMemoryMap::CartridgeD1A3,
-        phys::UNKNOWN_RANGE => PhysicalMemoryMap::ExternSysAD,
-
-        // unused ranges
-        0x00800000..=0x03EFFFFF => PhysicalMemoryMap::Unused,
-        0x04002000..=0x0403FFFF => PhysicalMemoryMap::Unused,
-        0x04900000..=0x04FFFFFF => PhysicalMemoryMap::Unused,
-    }
-});
 
 /// N64 virtual memory mapping
 ///
@@ -233,40 +201,3 @@ impl From<u32> for VirtualMemoryMap {
 /// | 0x1FC00800..=0x1FCFFFFF | Reserved                     |                                                                           |
 /// | 0x1FD00000..=0x7FFFFFFF | Cartridge Domain 1 Address 3 |                                                                           |
 /// | 0x80000000..=0xFFFFFFFF | External SysAd               |                                                                           |
-#[derive(Debug)]
-pub enum PhysicalMemoryMap {
-    RDRAM,
-    RDRAMReg,
-    SPDMEM,
-    SPIMEM,
-    SPReg,
-    DPCmdReg,
-    DPSpanReg,
-    MIPSInterface,
-    VideoInterface,
-    AudioInterface,
-    PeripheralInterface,
-    RDRAMInterface,
-    SerialInterface,
-    CartridgeD2A1,
-    CartridgeD1A1,
-    CartridgeD2A2,
-    CartridgeD1A2,
-    CartridgeD1A3,
-    PIFROM,
-    PIFRAM,
-    Reserved,
-    ExternSysAD,
-    Unused,
-}
-
-impl From<usize> for PhysicalMemoryMap {
-    fn from(addr: usize) -> Self {
-        PHYS_MAP.get(addr).unwrap().0
-    }
-}
-impl From<u32> for PhysicalMemoryMap {
-    fn from(addr: u32) -> Self {
-        (addr as usize).into()
-    }
-}
