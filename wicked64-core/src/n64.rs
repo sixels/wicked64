@@ -64,11 +64,7 @@ pub struct State {
 
 impl State {
     pub fn new(mmu: MemoryManager, cpu: Cpu<BigEndian>, cache: Arc<Cache>) -> Self {
-        Self {
-            mmu,
-            cpu,
-            cache,
-        }
+        Self { mmu, cpu, cache }
     }
 }
 
@@ -76,7 +72,7 @@ impl State {
 mod tests {
     use byteorder::{BigEndian, ByteOrder};
 
-    use crate::mmu::MemoryUnit;
+    use crate::mmu::{map::addr_map, MemoryUnit};
 
     use super::*;
 
@@ -85,8 +81,8 @@ mod tests {
 
         let mut state = n64.state().lock();
 
-        let cart = state.mmu.cartridge();
-        let header_pc = cart.read::<u32, O>(0x08);
+        let cart_rom = *addr_map::phys::CART_D1A2_RANGE.start();
+        let header_pc = state.mmu.read::<u32, O>(0x08 + cart_rom);
         assert!(header_pc == 0x80001000);
 
         state.cpu.pc = header_pc as u64;
