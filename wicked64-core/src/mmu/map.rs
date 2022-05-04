@@ -1,3 +1,7 @@
+use std::{collections::BTreeMap, ops::RangeInclusive};
+
+use once_cell::sync::Lazy;
+
 pub mod addr_map {
     use std::ops::RangeInclusive;
     type AddrRange = RangeInclusive<usize>;
@@ -80,8 +84,62 @@ macro_rules! map_range {
         map
     }};
 }
-    };
+
+macro_rules! map_range_tup {
+    ($( $range:expr => $value:expr , )* ) => {{
+        let mut map = RangeMap::new();
+
+        $( map.insert_range_unchecked($range, ($value, *$range.start())); )*
+
+        map
+    }};
 }
+
+static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
+    use addr_map::virt;
+
+    map_range! {
+        virt::KUSEG_RANGE => VirtualMemoryMap::KUSEG,
+        virt::KSEG0_RANGE => VirtualMemoryMap::KSEG0,
+        virt::KSEG1_RANGE => VirtualMemoryMap::KSEG1,
+        virt::KSSEG_RANGE => VirtualMemoryMap::KSSEG,
+        virt::KSEG3_RANGE => VirtualMemoryMap::KSEG3,
+    }
+});
+
+static PHYS_MAP: Lazy<RangeMap<(PhysicalMemoryMap, usize)>> = Lazy::new(|| {
+    use addr_map::phys;
+
+    map_range_tup! {
+        phys::RDRAM_RANGE => PhysicalMemoryMap::RDRAM,
+        phys::RDRAM_REG_RANGE => PhysicalMemoryMap::RDRAMReg,
+        phys::SP_DMEM_RANGE => PhysicalMemoryMap::SPDMEM,
+        phys::SP_IMEM_RANGE => PhysicalMemoryMap::SPIMEM,
+        phys::SP_REG_RANGE => PhysicalMemoryMap::SPReg,
+        phys::DP_CMD_REG_RANGE => PhysicalMemoryMap::DPCmdReg,
+        phys::DP_SPAN_REG_RANGE => PhysicalMemoryMap::DPSpanReg,
+        phys::MIPS_INT_RANGE => PhysicalMemoryMap::MIPSInterface,
+        phys::VIDEO_INT_RANGE => PhysicalMemoryMap::VideoInterface,
+        phys::AUDIO_INT_RANGE => PhysicalMemoryMap::AudioInterface,
+        phys::PERIPHERAL_INT_RANGE => PhysicalMemoryMap::PeripheralInterface,
+        phys::RDRAM_INT_RANGE => PhysicalMemoryMap::RDRAMInterface,
+        phys::SERIAL_INT_RANGE => PhysicalMemoryMap::SerialInterface,
+        phys::CART_D2A1_RANGE => PhysicalMemoryMap::CartridgeD2A1,
+        phys::CART_D1A1_RANGE => PhysicalMemoryMap::CartridgeD1A1,
+        phys::CART_D2A2_RANGE => PhysicalMemoryMap::CartridgeD2A2,
+        phys::CART_D1A2_RANGE => PhysicalMemoryMap::CartridgeD1A2,
+        phys::PIF_ROM_RANGE => PhysicalMemoryMap::PIFROM,
+        phys::PIF_RAM_RANGE => PhysicalMemoryMap::PIFRAM,
+        phys::RESERVED_RANGE => PhysicalMemoryMap::Reserved,
+        phys::CART_D1A3_RANGE => PhysicalMemoryMap::CartridgeD1A3,
+        phys::UNKNOWN_RANGE => PhysicalMemoryMap::ExternSysAD,
+
+        // unused ranges
+        0x00800000..=0x03EFFFFF => PhysicalMemoryMap::Unused,
+        0x04002000..=0x0403FFFF => PhysicalMemoryMap::Unused,
+        0x04900000..=0x04FFFFFF => PhysicalMemoryMap::Unused,
+    }
+});
 
 /// N64 virtual memory mapping
 ///
@@ -92,7 +150,7 @@ macro_rules! map_range {
 /// | 0xA0000000..=0xBFFFFFFF | KSEG1 | Kernel segment 1. Direct mapped, no cache. |
 /// | 0xC0000000..=0xDFFFFFFF | KSSEG | Kernel supervisor segment. TLB mapped.     |
 /// | 0xE0000000..=0xFFFFFFFF | KSEG3 | Kernel segment 3. TLB mapped.              |
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum VirtualMemoryMap {
     KUSEG,
     KSEG0,
@@ -103,17 +161,7 @@ pub enum VirtualMemoryMap {
 
 impl From<usize> for VirtualMemoryMap {
     fn from(addr: usize) -> Self {
-        use addr_map::*;
-
-        map_range!(addr, {
-            virt::KUSEG_RANGE => Self::KUSEG,
-            virt::KSEG0_RANGE => Self::KSEG0,
-            virt::KSEG1_RANGE => Self::KSEG1,
-            virt::KSSEG_RANGE => Self::KSSEG,
-            virt::KSEG3_RANGE => Self::KSEG3,
-            0x100000000..=usize::MAX => panic!("Memory offset '0x{:08x}' out of bound", addr),
-            _ => unreachable!()
-        })
+        VIRT_MAP.get(addr).copied().unwrap()
     }
 }
 impl From<u32> for VirtualMemoryMap {
@@ -156,7 +204,7 @@ impl From<u32> for VirtualMemoryMap {
 pub enum PhysicalMemoryMap {
     RDRAM,
     RDRAMReg,
-    SPDMEM(usize),
+    SPDMEM,
     SPIMEM,
     SPReg,
     DPCmdReg,
@@ -170,51 +218,18 @@ pub enum PhysicalMemoryMap {
     CartridgeD2A1,
     CartridgeD1A1,
     CartridgeD2A2,
-    CartridgeD1A2(usize),
+    CartridgeD1A2,
     CartridgeD1A3,
     PIFROM,
-    PIFRAM(usize),
+    PIFRAM,
     Reserved,
     ExternSysAD,
-    Unused(usize),
+    Unused,
 }
 
 impl From<usize> for PhysicalMemoryMap {
     fn from(addr: usize) -> Self {
-        use addr_map::*;
-
-        map_range!(addr, {
-            phys::RDRAM_RANGE => Self::RDRAM,
-            phys::RDRAM_REG_RANGE => Self::RDRAMReg,
-            phys::SP_DMEM_RANGE => Self::SPDMEM(addr - *phys::SP_DMEM_RANGE.start()),
-            phys::SP_IMEM_RANGE => Self::SPIMEM,
-            phys::SP_REG_RANGE => Self::SPReg,
-            phys::DP_CMD_REG_RANGE => Self::DPCmdReg,
-            phys::DP_SPAN_REG_RANGE => Self::DPSpanReg,
-            phys::MIPS_INT_RANGE => Self::MIPSInterface,
-            phys::VIDEO_INT_RANGE => Self::VideoInterface,
-            phys::AUDIO_INT_RANGE => Self::AudioInterface,
-            phys::PERIPHERAL_INT_RANGE => Self::PeripheralInterface,
-            phys::RDRAM_INT_RANGE => Self::RDRAMInterface,
-            phys::SERIAL_INT_RANGE => Self::SerialInterface,
-            phys::CART_D2A1_RANGE => Self::CartridgeD2A1,
-            phys::CART_D1A1_RANGE => Self::CartridgeD1A1,
-            phys::CART_D2A2_RANGE => Self::CartridgeD2A2,
-            phys::CART_D1A2_RANGE => Self::CartridgeD1A2(addr - *phys::CART_D1A2_RANGE.start()),
-            phys::PIF_ROM_RANGE => Self::PIFROM,
-            phys::PIF_RAM_RANGE => Self::PIFRAM(addr - *phys::PIF_RAM_RANGE.start()),
-            phys::RESERVED_RANGE => Self::Reserved,
-            phys::CART_D1A3_RANGE => Self::CartridgeD1A3,
-            phys::UNKNOWN_RANGE => Self::ExternSysAD,
-
-            // unused ranges
-            0x00800000..=0x03EFFFFF => Self::Unused(addr),
-            0x04002000..=0x0403FFFF => Self::Unused(addr),
-            0x04900000..=0x04FFFFFF => Self::Unused(addr),
-
-            0x100000000..=usize::MAX => panic!("Memory offset '0x{:08x}' out of bound", addr),
-            _ => unreachable!()
-        })
+        PHYS_MAP.get(addr).unwrap().0
     }
 }
 impl From<u32> for PhysicalMemoryMap {
