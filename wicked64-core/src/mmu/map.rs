@@ -12,31 +12,35 @@ pub mod addr_map {
         pub static KSEG3_RANGE: AddrRange = 0xE0000000..=0xFFFFFFFF;
     }
 
+    #[rustfmt::skip]
     pub mod phys {
         use super::AddrRange;
 
-        pub const RDRAM_RANGE: AddrRange = 0x00000000..=0x007FFFFF;
-        pub const RDRAM_REG_RANGE: AddrRange = 0x03F00000..=0x03FFFFFF;
-        pub const SP_DMEM_RANGE: AddrRange = 0x04000000..=0x04000FFF;
-        pub const SP_IMEM_RANGE: AddrRange = 0x04001000..=0x04001FFF;
-        pub const SP_REG_RANGE: AddrRange = 0x04040000..=0x040FFFFF;
-        pub const DP_CMD_REG_RANGE: AddrRange = 0x04100000..=0x041FFFFF;
-        pub const DP_SPAN_REG_RANGE: AddrRange = 0x04200000..=0x042FFFFF;
-        pub const MIPS_INT_RANGE: AddrRange = 0x04300000..=0x043FFFFF;
-        pub const VIDEO_INT_RANGE: AddrRange = 0x04400000..=0x044FFFFF;
-        pub const AUDIO_INT_RANGE: AddrRange = 0x04500000..=0x045FFFFF;
+        pub const RDRAM_RANGE: AddrRange          = 0x00000000..=0x007FFFFF;
+        pub const RDRAM_REG_RANGE: AddrRange      = 0x03F00000..=0x03FFFFFF;
+        pub const SP_DMEM_RANGE: AddrRange        = 0x04000000..=0x04000FFF;
+        pub const SP_IMEM_RANGE: AddrRange        = 0x04001000..=0x04001FFF;
+        pub const SP_REG_RANGE: AddrRange         = 0x04040000..=0x040FFFFF;
+        pub const DP_CMD_REG_RANGE: AddrRange     = 0x04100000..=0x041FFFFF;
+        pub const DP_SPAN_REG_RANGE: AddrRange    = 0x04200000..=0x042FFFFF;
+        pub const MIPS_INT_RANGE: AddrRange       = 0x04300000..=0x043FFFFF;
+        pub const VIDEO_INT_RANGE: AddrRange      = 0x04400000..=0x044FFFFF;
+        pub const AUDIO_INT_RANGE: AddrRange      = 0x04500000..=0x045FFFFF;
         pub const PERIPHERAL_INT_RANGE: AddrRange = 0x04600000..=0x046FFFFF;
-        pub const RDRAM_INT_RANGE: AddrRange = 0x04700000..=0x047FFFFF;
-        pub const SERIAL_INT_RANGE: AddrRange = 0x04800000..=0x048FFFFF;
-        pub const CART_D2A1_RANGE: AddrRange = 0x05000000..=0x05FFFFFF;
-        pub const CART_D1A1_RANGE: AddrRange = 0x06000000..=0x07FFFFFF;
-        pub const CART_D2A2_RANGE: AddrRange = 0x08000000..=0x0FFFFFFF;
-        pub const CART_D1A2_RANGE: AddrRange = 0x10000000..=0x1FBFFFFF;
-        pub const PIF_ROM_RANGE: AddrRange = 0x1FC00000..=0x1FC007BF;
-        pub const PIF_RAM_RANGE: AddrRange = 0x1FC007C0..=0x1FC007FF;
-        pub const RESERVED_RANGE: AddrRange = 0x1FC00800..=0x1FCFFFFF;
-        pub const CART_D1A3_RANGE: AddrRange = 0x1FD00000..=0x7FFFFFFF;
-        pub const UNKNOWN_RANGE: AddrRange = 0x80000000..=0xFFFFFFFF;
+        pub const RDRAM_INT_RANGE: AddrRange      = 0x04700000..=0x047FFFFF;
+        pub const SERIAL_INT_RANGE: AddrRange     = 0x04800000..=0x048FFFFF;
+        pub const CART_D2A1_RANGE: AddrRange      = 0x05000000..=0x05FFFFFF;
+        pub const CART_D1A1_RANGE: AddrRange      = 0x06000000..=0x07FFFFFF;
+        pub const CART_D2A2_RANGE: AddrRange      = 0x08000000..=0x0FFFFFFF;
+        pub const CART_D1A2_RANGE: AddrRange      = 0x10000000..=0x1FBFFFFF;
+        pub const PIF_ROM_RANGE: AddrRange        = 0x1FC00000..=0x1FC007BF;
+        pub const PIF_RAM_RANGE: AddrRange        = 0x1FC007C0..=0x1FC007FF;
+        pub const RESERVED_RANGE: AddrRange       = 0x1FC00800..=0x1FCFFFFF;
+        pub const CART_D1A3_RANGE: AddrRange      = 0x1FD00000..=0x7FFFFFFF;
+        pub const UNKNOWN_RANGE: AddrRange        = 0x80000000..=0xFFFFFFFF;
+    }
+}
+
     }
 }
 
