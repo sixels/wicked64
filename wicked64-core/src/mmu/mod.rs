@@ -38,25 +38,12 @@ pub trait MemoryUnit {
         let _ = (dst, src, n);
         unimplemented!()
     }
-}
 
-impl<const N: usize> MemoryUnit for [u8; N] {
-    fn read<I, O>(&self, addr: usize) -> I
-    where
-        Self: Sized,
-        I: MemInteger + Sized,
-        O: ByteOrder + Sized,
-    {
-        I::read_from::<O>(&self[addr..addr + I::SIZE])
+    fn buffer(&self) -> &[u8] {
+        unimplemented!()
     }
-
-    fn store<I, O>(&mut self, addr: usize, value: I)
-    where
-        Self: Sized,
-        I: MemInteger + Sized,
-        O: ByteOrder + Sized,
-    {
-        I::write_to::<O>(&mut self[addr..addr + I::SIZE], value);
+    fn buffer_mut(&mut self) -> &mut [u8] {
+        unimplemented!()
     }
 }
 
@@ -78,23 +65,11 @@ impl MemoryUnit for Box<[u8]> {
     {
         I::write_to::<O>(&mut self[addr..addr + I::SIZE], value);
     }
-}
 
-impl<const N: usize> MemoryUnit for Box<[u8; N]> {
-    fn read<I, O>(&self, addr: usize) -> I
-    where
-        Self: Sized,
-        I: MemInteger + Sized,
-        O: ByteOrder + Sized,
-    {
-        I::read_from::<O>(&self[addr..addr + I::SIZE])
+    fn buffer(&self) -> &[u8] {
+        self.deref()
     }
-    fn store<I, O>(&mut self, addr: usize, value: I)
-    where
-        Self: Sized,
-        I: MemInteger + Sized,
-        O: ByteOrder + Sized,
-    {
-        I::write_to::<O>(&mut self[addr..addr + I::SIZE], value);
+    fn buffer_mut(&mut self) -> &mut [u8] {
+        self.deref_mut()
     }
 }
