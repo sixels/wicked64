@@ -2,11 +2,23 @@ pub mod map;
 pub mod memory;
 pub mod num;
 
+use std::ops::{Deref, DerefMut};
+
 use byteorder::ByteOrder;
+use enum_dispatch::enum_dispatch;
+
 pub use memory::MemoryManager;
 
 use self::num::MemInteger;
+use crate::hardware::Cartridge;
 
+#[enum_dispatch(MemoryUnit)]
+enum MemoryUnits {
+    BoxedSlice(Box<[u8]>),
+    Cartridge,
+}
+
+#[enum_dispatch]
 pub trait MemoryUnit {
     fn read<I, O>(&self, addr: usize) -> I
     where
