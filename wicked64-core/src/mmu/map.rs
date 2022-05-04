@@ -157,15 +157,6 @@ macro_rules! map_range {
     }};
 }
 
-macro_rules! map_range_tup {
-    ($( $range:expr => $value:expr , )* ) => {{
-        let mut map = RangeMap::new();
-
-        $( map.insert_range_unchecked($range, ($value, *$range.start())); )*
-
-        map
-    }};
-}
 
 static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
     use addr_map::virt;
