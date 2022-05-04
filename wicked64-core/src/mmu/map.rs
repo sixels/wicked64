@@ -147,12 +147,11 @@ impl<T> RangeMap<T> {
     }
 }
 
+#[macro_export]
 macro_rules! map_range {
     ($( $range:expr => $value:expr , )* ) => {{
         let mut map = RangeMap::new();
-
-        $( map.insert_range_unchecked($range, $value); )*
-
+        $( map.insert_range_unchecked(&$range, $value); )*
         map
     }};
 }
