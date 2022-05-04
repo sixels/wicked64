@@ -85,6 +85,16 @@ impl<T> RangeMap<T> {
         None
     }
 
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        for start in self.inner.keys().copied() {
+            let diff = index - start;
+            if diff > 0 {
+                return self.inner.get_mut(&start);
+            }
+        }
+
+        None
+    }
         None
     }
 }
