@@ -1,8 +1,8 @@
 use byteorder::ByteOrder;
 
-use crate::{hardware::Cartridge, mmu::map::PhysicalMemoryMap};
+use crate::{hardware::Cartridge, map_ranges};
 
-use super::{num::MemInteger, MemoryUnit};
+use super::{map::RangeMap, num::MemInteger, MemoryUnit, MemoryUnits};
 
 // 4 megabytes
 pub const RDRAM_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
@@ -10,38 +10,32 @@ pub const RDRAM_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
 /// N64 Memory Management Unit
 #[allow(dead_code)]
 pub struct MemoryManager {
-    /// Up to 8 megabytes internal memory size.
-    rdram: Box<[u8]>,
-    /// 9th bit from `rdram` bytes
+    units: RangeMap<MemoryUnits>,
+    /// 9th bit from RDRAM bytes
     rdram9: Box<[u8]>,
-
-    /// dummy SP DMEM
-    spdmem: Box<[u8; 0x1000]>,
-    // dummy PIF RAM
-    pifram: Box<[u8; 0x1000]>,
-    cartridge: Cartridge,
 }
 
 impl MemoryManager {
     pub fn new(cartridge: Cartridge) -> MemoryManager {
+        use crate::mmu::map::addr_map::phys;
+
         let rdram = std::iter::repeat(0)
             .take(2 * RDRAM_SIZE_IN_BYTES)
-            .collect::<Vec<u8>>();
-        let rdram9 = std::iter::repeat(0)
-            .take(2 * RDRAM_SIZE_IN_BYTES)
-            .collect::<Vec<u8>>();
+            .collect::<Box<[u8]>>();
+
+        let units = map_ranges! {
+            phys::RDRAM_RANGE => MemoryUnits::BoxedSlice(rdram),
+            phys::SP_DMEM_RANGE => MemoryUnits::BoxedSlice(Box::new([0u8;0x1000]) as Box<[u8]>),
+            phys::PIF_RAM_RANGE => MemoryUnits::BoxedSlice(Box::new([0u8;0x1000]) as Box<[u8]>),
+            phys::CART_D1A2_RANGE => MemoryUnits::Cartridge(cartridge),
+        };
 
         Self {
-            rdram: rdram.into_boxed_slice(),
-            rdram9: rdram9.into_boxed_slice(),
-            spdmem: Box::new([0; 0x1000]),
-            pifram: Box::new([0; 0x1000]),
-            cartridge,
+            units,
+            rdram9: std::iter::repeat(0)
+                .take(2 * RDRAM_SIZE_IN_BYTES)
+                .collect::<Box<[u8]>>(),
         }
-    }
-
-    pub fn cartridge(&self) -> &Cartridge {
-        &self.cartridge
     }
 }
 
@@ -50,23 +44,13 @@ impl MemoryUnit for MemoryManager {
     where
         Self: Sized,
     {
-        let src: *const [u8] = match PhysicalMemoryMap::from(src) {
-            PhysicalMemoryMap::RDRAM => &self.rdram[src..src + n] as *const _,
-            PhysicalMemoryMap::CartridgeD1A2(a) => &self.cartridge.data[a..a + n] as *const _,
-            PhysicalMemoryMap::SPDMEM(a) => &self.spdmem[a..a + n] as *const _,
-            PhysicalMemoryMap::PIFRAM(a) => &self.pifram[a..a + n] as *const _,
-            other => panic!("Copy not supported for src region '{other:?}'"),
+        let src = {
+            let s = self.units.get(src).unwrap();
+            s.buffer().as_ptr()
         };
-        let dst = match PhysicalMemoryMap::from(dst) {
-            PhysicalMemoryMap::RDRAM => &mut self.rdram[dst..dst + n],
-            PhysicalMemoryMap::CartridgeD1A2(a) => &mut self.cartridge.data[a..a + n],
-            PhysicalMemoryMap::SPDMEM(a) => &mut self.spdmem[a..a + n],
-            PhysicalMemoryMap::PIFRAM(a) => &mut self.pifram[a..a + n],
-            other => panic!("Copy not supported for dst region '{other:?}'"),
-        };
+        let dst = self.units.get_mut(dst).unwrap().buffer_mut().as_mut_ptr();
 
-        debug_assert!(std::ptr::eq(dst as *const _, src) == false);
-        dst.copy_from_slice(unsafe { &*src });
+        unsafe { std::ptr::copy_nonoverlapping(src, dst, n) };
     }
 
     fn read<I, O>(&self, addr: usize) -> I
@@ -75,30 +59,12 @@ impl MemoryUnit for MemoryManager {
         I: MemInteger + Sized,
         O: ByteOrder + Sized,
     {
-        match PhysicalMemoryMap::from(addr) {
-            PhysicalMemoryMap::RDRAM => I::read_from::<O>(&self.rdram[addr..addr + I::SIZE]),
-            PhysicalMemoryMap::SPDMEM(offset) => {
-                I::read_from::<O>(&self.spdmem[offset..offset + I::SIZE])
-            }
-            PhysicalMemoryMap::CartridgeD1A2(offset) => self.cartridge.read::<I, O>(offset),
-            other => {
-                tracing::warn!("Unhandled `read` region: '{other:?}'");
-                I::default()
-            }
-        }
+        let (offset, unit) = self.units.get_offset_value(addr).unwrap();
+        unit.read::<I, O>(offset)
     }
+
     fn store<I: MemInteger, O: ByteOrder>(&mut self, addr: usize, value: I) {
-        match PhysicalMemoryMap::from(addr) {
-            PhysicalMemoryMap::RDRAM => {
-                I::write_to::<O>(&mut self.rdram[addr..addr + I::SIZE], value)
-            }
-            PhysicalMemoryMap::SPDMEM(offset) => {
-                I::write_to::<O>(&mut self.spdmem[offset..offset + I::SIZE], value)
-            }
-            PhysicalMemoryMap::PIFRAM(offset) => {
-                I::write_to::<O>(&mut self.pifram[offset..offset + I::SIZE], value)
-            }
-            other => tracing::warn!("Unhandled `store` region: '{other:?}'"),
-        }
+        let (offset, unit) = self.units.get_mut_offset_value(addr).unwrap();
+        unit.store::<I, O>(offset, value);
     }
 }
