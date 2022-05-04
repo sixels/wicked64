@@ -90,8 +90,8 @@ impl<O: ByteOrder> Cpu<O> {
     /// Translates a virtual address into a physical address
     pub fn translate_virtual(&self, addr: usize) -> usize {
         match VirtualMemoryMap::from(addr) {
-            VirtualMemoryMap::KSEG0 => addr - (*addr_map::VIRT_KSEG0_RANGE.start()),
-            VirtualMemoryMap::KSEG1 => addr - (*addr_map::VIRT_KSEG1_RANGE.start()),
+            VirtualMemoryMap::KSEG0 => addr - (*addr_map::virt::KSEG0_RANGE.start()),
+            VirtualMemoryMap::KSEG1 => addr - (*addr_map::virt::KSEG1_RANGE.start()),
             mm => panic!("Unhandled Virtual Memory segment: {mm:?} (0x{addr:08x})."),
         }
     }
