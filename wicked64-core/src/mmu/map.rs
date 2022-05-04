@@ -41,6 +41,28 @@ pub mod addr_map {
     }
 }
 
+pub struct RangeMap<T> {
+    inner: BTreeMap<usize, T>,
+}
+
+impl<T> RangeMap<T> {
+    pub fn new() -> Self {
+        Self {
+            inner: BTreeMap::new(),
+        }
+    }
+    pub fn insert(&mut self, start: usize, value: T) {
+        self.inner.insert(start, value);
+    }
+    pub fn get(&mut self, index: usize) -> Option<&T> {
+        for start in self.inner.keys() {
+            let diff = index - start;
+            if diff > 0 {
+                return self.inner.get(start);
+            }
+        }
+
+        None
     }
 }
 
