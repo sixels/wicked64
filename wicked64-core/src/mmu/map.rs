@@ -54,6 +54,11 @@ impl<T> RangeMap<T> {
     pub fn insert(&mut self, start: usize, value: T) {
         self.inner.insert(start, value);
     }
+
+    pub fn insert_range_unchecked(&mut self, range: RangeInclusive<usize>, value: T) {
+        self.insert(*range.start(), value)
+    }
+
     pub fn get(&mut self, index: usize) -> Option<&T> {
         for start in self.inner.keys() {
             let diff = index - start;
