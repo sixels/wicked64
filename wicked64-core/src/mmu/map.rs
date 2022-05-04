@@ -148,7 +148,7 @@ impl<T> RangeMap<T> {
 }
 
 #[macro_export]
-macro_rules! map_range {
+macro_rules! map_ranges {
     ($( $range:expr => $value:expr , )* ) => {{
         let mut map = RangeMap::new();
         $( map.insert_range_unchecked(&$range, $value); )*
@@ -160,7 +160,7 @@ macro_rules! map_range {
 static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
     use addr_map::virt;
 
-    map_range! {
+    map_ranges! {
         virt::KUSEG_RANGE => VirtualMemoryMap::KUSEG,
         virt::KSEG0_RANGE => VirtualMemoryMap::KSEG0,
         virt::KSEG1_RANGE => VirtualMemoryMap::KSEG1,
