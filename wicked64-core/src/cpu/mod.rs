@@ -327,7 +327,7 @@ mod tests {
     /// Checks CPU registers after a Power-On reset
     #[test]
     fn power_on_procedure() {
-        let mut dummy = [0; 100];
+        let mut dummy = Box::new([0u8; 100]) as Box<[u8]>;
 
         // prevent PIF boot side effects
         let cpu = Cpu::<BigEndian>::new(false, &mut dummy);
