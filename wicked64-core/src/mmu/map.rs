@@ -73,6 +73,18 @@ impl<T> RangeMap<T> {
 
         None
     }
+
+    pub fn get_offset_value(&self, index: usize) -> Option<(usize, &T)> {
+        for start in self.inner.keys() {
+            let diff = index - start;
+            if diff > 0 {
+                return self.inner.get(start).map(|v| (diff, v));
+            }
+        }
+
+        None
+    }
+
         None
     }
 }
