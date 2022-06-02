@@ -1,5 +1,6 @@
 pub(crate) mod cache;
 pub mod codegen;
+pub mod register;
 
 use std::ops::DerefMut;
 
