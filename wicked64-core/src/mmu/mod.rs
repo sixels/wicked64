@@ -2,7 +2,10 @@ pub mod map;
 pub mod memory;
 pub mod num;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+};
 
 use byteorder::ByteOrder;
 use enum_dispatch::enum_dispatch;
@@ -22,12 +25,12 @@ enum MemoryUnits {
 pub trait MemoryUnit {
     fn read<I, O>(&self, addr: usize) -> I
     where
-        I: MemInteger + Sized,
+        I: MemInteger + Sized + Debug,
         O: ByteOrder + Sized;
 
     fn store<I, O>(&mut self, addr: usize, value: I)
     where
-        I: MemInteger + Sized,
+        I: MemInteger + Sized + Debug,
         O: ByteOrder + Sized;
 
     // Copy `n` bytes from `src` to `dst`
