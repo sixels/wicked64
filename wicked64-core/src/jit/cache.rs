@@ -4,7 +4,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::n64::SyncState;
 
-use super::{CompiledBlock, JitEngine};
+use super::{code::CompiledBlock, engine::JitEngine};
 
 pub struct Cache {
     jit_engine: JitEngine,
@@ -42,7 +42,7 @@ impl Default for Cache {
     /// Creates a new cache manager for jitted instructions
     fn default() -> Cache {
         Self {
-            jit_engine: JitEngine::new().unwrap(),
+            jit_engine: JitEngine::new(),
             blocks: Default::default(),
             compiled_ranges: Default::default(),
         }
