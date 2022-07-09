@@ -326,7 +326,9 @@ mod tests {
 
     /// Checks CPU registers after a Power-On reset
     #[test]
-    fn power_on_procedure() {
+    fn it_should_perform_the_power_on_procedure() {
+        crate::tests::init_trace();
+
         let mut dummy = Box::new([0u8; 100]) as Box<[u8]>;
 
         // prevent PIF boot side effects
@@ -380,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn pif_behavior() {
+    fn it_should_simulate_the_pif_rom_behavior() {
         crate::tests::init_trace();
 
         let mut mmu = {
