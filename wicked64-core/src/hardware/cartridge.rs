@@ -38,4 +38,10 @@ impl MemoryUnit for Cartridge {
     fn store<I: MemInteger, O: ByteOrder>(&mut self, addr: usize, value: I) {
         I::write_to::<O>(&mut self.data[addr..addr + I::SIZE], value);
     }
+    fn buffer(&self) -> &[u8] {
+        &self.data
+    }
+    fn buffer_mut(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
 }
