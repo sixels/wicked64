@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use byteorder::ByteOrder;
 
 use crate::{hardware::Cartridge, map_ranges};
@@ -48,23 +50,55 @@ impl MemoryUnit for MemoryManager {
             let s = self.units.get(src).unwrap();
             s.buffer().as_ptr()
         };
-        let dst = self.units.get_mut(dst).unwrap().buffer_mut().as_mut_ptr();
+        let dst = {
+            let dst_unit = self.units.get_mut(dst).unwrap();
+            dst_unit.buffer_mut().as_mut_ptr()
+        };
 
         unsafe { std::ptr::copy_nonoverlapping(src, dst, n) };
+
+        #[cfg(test)]
+        {
+            let src = unsafe { std::slice::from_raw_parts(src, n) };
+            let dst = unsafe { std::slice::from_raw_parts(dst, n) };
+            assert!(&src[..n] == &dst[..n]);
+        }
     }
 
     fn read<I, O>(&self, addr: usize) -> I
     where
         Self: Sized,
-        I: MemInteger + Sized,
+        I: MemInteger + Sized + Debug,
         O: ByteOrder + Sized,
     {
-        let (offset, unit) = self.units.get_offset_value(addr).unwrap();
-        unit.read::<I, O>(offset)
+        match self.units.get_offset_value(addr) {
+            Some((offset, unit)) => {
+                let value = unit.read::<I, O>(offset);
+                value
+            }
+            None => {
+                tracing::warn!(
+                    "No modules are handling memory address 0x{addr:08x}. This might led to UB"
+                );
+                I::default()
+            }
+        }
     }
 
-    fn store<I: MemInteger, O: ByteOrder>(&mut self, addr: usize, value: I) {
-        let (offset, unit) = self.units.get_mut_offset_value(addr).unwrap();
-        unit.store::<I, O>(offset, value);
+    fn store<I, O>(&mut self, addr: usize, value: I)
+    where
+        I: MemInteger + Sized + Debug,
+        O: ByteOrder + Sized,
+    {
+        match self.units.get_mut_offset_value(addr) {
+            Some((offset, unit)) => {
+                unit.store::<I, O>(offset, value);
+            }
+            None => {
+                tracing::warn!(
+                    "No modules are handling memory address 0x{addr:08x}. This might led to UB"
+                );
+            }
+        }
     }
 }
