@@ -84,6 +84,7 @@ pub mod addr_map {
     }
 }
 
+#[derive(Debug)]
 pub struct RangeMap<T> {
     inner: BTreeMap<usize, T>,
 }
@@ -94,6 +95,14 @@ impl<T> RangeMap<T> {
             inner: BTreeMap::new(),
         }
     }
+
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, usize, T> {
+        self.inner.iter()
+    }
+    pub fn values(&self) -> std::collections::btree_map::Values<'_, usize, T> {
+        self.inner.values()
+    }
+
     pub fn insert(&mut self, start: usize, value: T) {
         self.inner.insert(start, value);
     }
@@ -103,9 +112,9 @@ impl<T> RangeMap<T> {
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
-        for start in self.inner.keys() {
-            let diff = index - start;
-            if diff > 0 {
+        for start in self.inner.keys().rev() {
+            let (_, overflow) = index.overflowing_sub(*start);
+            if !overflow {
                 return self.inner.get(start);
             }
         }
@@ -114,10 +123,11 @@ impl<T> RangeMap<T> {
     }
 
     pub fn get_offset_value(&self, index: usize) -> Option<(usize, &T)> {
-        for start in self.inner.keys() {
-            let diff = index - start;
-            if diff > 0 {
-                return self.inner.get(start).map(|v| (diff, v));
+        for start in self.inner.keys().rev() {
+            let (offset, overflow) = index.overflowing_sub(*start);
+            match overflow {
+                true => continue,
+                false => return self.inner.get(start).map(|value| (offset, value)),
             }
         }
 
@@ -125,10 +135,11 @@ impl<T> RangeMap<T> {
     }
 
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        for start in self.inner.keys().copied() {
-            let diff = index - start;
-            if diff > 0 {
-                return self.inner.get_mut(&start);
+        for start in self.inner.keys().rev().copied() {
+            let (_, overflow) = index.overflowing_sub(start);
+            match overflow {
+                true => continue,
+                false => return self.inner.get_mut(&start),
             }
         }
 
@@ -136,10 +147,11 @@ impl<T> RangeMap<T> {
     }
 
     pub fn get_mut_offset_value(&mut self, index: usize) -> Option<(usize, &mut T)> {
-        for start in self.inner.keys().copied() {
-            let diff = index - start;
-            if diff > 0 {
-                return self.inner.get_mut(&start).map(|v| (diff, v));
+        for start in self.inner.keys().rev().copied() {
+            let (offset, overflow) = index.overflowing_sub(start);
+            match overflow {
+                true => continue,
+                false => return self.inner.get_mut(&start).map(|value| (offset, value)),
             }
         }
 
@@ -156,7 +168,6 @@ macro_rules! map_ranges {
     }};
 }
 
-
 static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
     use addr_map::virt;
 
@@ -168,8 +179,6 @@ static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
         virt::KSEG3_RANGE => VirtualMemoryMap::KSEG3,
     }
 });
-
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum VirtualMemoryMap {
