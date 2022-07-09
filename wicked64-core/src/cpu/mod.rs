@@ -72,6 +72,8 @@ pub struct Cpu<O: ByteOrder> {
 impl<O: ByteOrder> Cpu<O> {
     /// Create a new CPU
     pub fn new<M: 'static + MemoryUnit + Sized>(simulate_pif: bool, mmu: &mut M) -> Self {
+        tracing::debug!("Creating the CPU");
+
         let mut cpu = Self::default().power_on();
         simulate_pif.then(|| cpu.simulate_pif(mmu));
         cpu
@@ -111,6 +113,8 @@ impl<O: ByteOrder> Cpu<O> {
     /// The side effects of this procedure
     /// [can be found in more details here](https://n64.readthedocs.io/#boot-process).
     fn simulate_pif<M: 'static + MemoryUnit + Sized>(&mut self, mmu: &mut M) {
+        tracing::debug!("Simulating PIF behavior");
+
         self.gpr = {
             let mut gpr = [0; 32];
 
@@ -137,6 +141,7 @@ impl<O: ByteOrder> Cpu<O> {
             ..Cp0::default()
         };
 
+        // tracing::debug!("Copying ")
         // The first 0x1000 bytes from the cartridge are then copied to SP DMEM.
         // This is implemented as a copy of 0x1000 bytes from 0xB0000000 (VIRTUAL) to
         // 0xA4000000 (VIRTUAL).
@@ -331,7 +336,8 @@ mod tests {
 
         let mut dummy = Box::new([0u8; 100]) as Box<[u8]>;
 
-        // prevent PIF boot side effects
+        tracing::info!("Creating the CPU with dummy memory");
+        // create the CPU preventing PIF side effects
         let cpu = Cpu::<BigEndian>::new(false, &mut dummy);
 
         let cp0 = &cpu.cp0;
@@ -385,12 +391,16 @@ mod tests {
     fn it_should_simulate_the_pif_rom_behavior() {
         crate::tests::init_trace();
 
+        tracing::info!("Loading dillonb/basic.z64");
         let mut mmu = {
             let cartridge = Cartridge::open("../assets/test-roms/dillonb/basic.z64").unwrap();
             MemoryManager::new(cartridge)
         };
 
+        tracing::info!("Creating the CPU with endianess BigEndian");
         let cpu = Cpu::<BigEndian>::new(true, &mut mmu);
+
+        tracing::info!("Checking GPR registers");
 
         assert_eq!(cpu.gpr[11], 0xffffffffa4000040);
         assert_eq!(cpu.gpr[20], 0x0000000000000001);
@@ -399,11 +409,15 @@ mod tests {
         assert_eq!(cpu.cp0.random, 0x1f);
         assert_eq!(cpu.cp0.prid, 0x00000B00);
 
+        tracing::info!("Checking Status registers");
+
         let status = &cpu.cp0.status;
         assert!(status.get_bit(cp0::Status::BIT_ERL_OFFSET));
         assert!(status.get_bit(cp0::Status::BIT_BEV_OFFSET));
         assert!(status.get_bits::<u8>(cp0::Status::BIT_CU_RANGE) == 0b0111);
         assert_eq!(status.get_execution_mode(), ExecutionMode::Kernel);
+
+        tracing::info!("Checking Config registers");
 
         let config = &cpu.cp0.config;
         assert!(config.get_bits::<u16>(4..=14) == 0b11001000110);
@@ -411,10 +425,11 @@ mod tests {
         assert!(config.get_bit(31) == false);
         assert!(config.get_bits::<u8>(cp0::Config::BIT_K0_RANGE) == 0b011);
 
-        let mut rom_title = Vec::with_capacity(20);
-        for i in 0x04000020..0x04000034 {
-            rom_title.push(mmu.read::<u8, BigEndian>(i));
-        }
+        tracing::info!("Checking if ROM title got saved");
+
+        let rom_title: Vec<u8> = (0x04000020..0x04000034)
+            .map(|i| mmu.read::<u8, BigEndian>(i))
+            .collect();
 
         assert_eq!(b"Dillon's N64 Tests\x20\x20".as_slice(), &rom_title);
     }
