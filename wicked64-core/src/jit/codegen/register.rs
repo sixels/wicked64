@@ -1,3 +1,4 @@
+#[repr(u8)]
 pub enum X64Gpr {
     Rax,
     Rbx,
