@@ -29,6 +29,15 @@ impl Cartridge {
 
         Ok(Self { data })
     }
+
+    pub fn endianness(&self) -> Result<CartridgeEndianness, ()> {
+        match self.data[0] {
+            0x80 => Ok(CartridgeEndianness::Big),
+            0x40 => Ok(CartridgeEndianness::Little),
+            0x37 => Ok(CartridgeEndianness::ByteSwapped),
+            _ => Err(()),
+        }
+    }
 }
 
 impl MemoryUnit for Cartridge {
