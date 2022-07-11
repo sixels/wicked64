@@ -45,3 +45,14 @@ impl MemoryUnit for Cartridge {
         &mut self.data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_should_get_the_cartridge_endianness() {
+        let cartridge = Cartridge::open("../assets/test-roms/dillonb/basic.z64").unwrap();
+        assert_eq!(cartridge.endianness(), Ok(CartridgeEndianness::Big));
+    }
+}
