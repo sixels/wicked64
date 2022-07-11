@@ -8,6 +8,16 @@ use crate::mmu::{num::MemInteger, MemoryUnit};
 /// 38 megabytes should be enough to play most games.
 pub const CARTRIDGE_SIZE_IN_BYTES: usize = 38 * 1024 * 1024;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CartridgeEndianness {
+    /// Used by .z64 ROM
+    Big,
+    /// Used by .n64 ROM
+    Little,
+    /// Used by .v64 ROM
+    ByteSwapped,
+}
+
 /// N64 Game Pak cartridge
 #[derive(Debug)]
 pub struct Cartridge {
