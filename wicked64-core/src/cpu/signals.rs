@@ -1,23 +1,20 @@
-pub struct ResetSignal;
+pub mod reset_signal {
+    pub const NONE: u8 = 0;
 
-#[allow(non_upper_case_globals)]
-impl ResetSignal {
-    pub const None: u8 = 0;
+    pub const POWER_ON_RESET: u8 = 1 << 0;
+    pub const COLD_RESET: u8 = 1 << 1;
+    pub const RESET: u8 = 1 << 2;
 
-    pub const PowerOnReset: u8 = 1 << 0;
-    pub const ColdReset: u8 = 1 << 1;
-    pub const Reset: u8 = 1 << 2;
-
-    pub const ColdResetActive: u8 = 1 << 3;
-    pub const ResetActive: u8 = 1 << 4;
+    pub const COLD_RESET_ACTIVE: u8 = 1 << 3;
+    pub const RESET_ACTIVE: u8 = 1 << 4;
 
     #[inline]
     pub fn disable_cold_reset(signals: u8) -> u8 {
-        self::disable_signal(signals, Self::ColdResetActive)
+        super::disable_signal(signals, self::COLD_RESET_ACTIVE)
     }
     #[inline]
     pub fn disable_soft_reset(signals: u8) -> u8 {
-        self::disable_signal(signals, Self::ResetActive)
+        super::disable_signal(signals, self::RESET_ACTIVE)
     }
 }
 
