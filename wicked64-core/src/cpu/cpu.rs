@@ -320,7 +320,7 @@ mod tests {
     use bitvec::bits;
     use byteorder::BigEndian;
 
-    use crate::cpu::cp0::status::ExecutionMode;
+    use crate::cpu::cp0::status::OperationMode;
     use crate::cpu::cp0::Config;
     use crate::hardware::Cartridge;
     use crate::mmu::MemoryManager;
@@ -419,7 +419,7 @@ mod tests {
         assert!(status.get_bit(cp0::Status::BIT_ERL_OFFSET));
         assert!(status.get_bit(cp0::Status::BIT_BEV_OFFSET));
         assert!(status.get_bits::<u8>(cp0::Status::BIT_CU_RANGE) == 0b0111);
-        assert_eq!(status.get_execution_mode(), ExecutionMode::Kernel);
+        assert_eq!(status.get_execution_mode(), OperationMode::Kernel);
 
         tracing::info!("Checking Config registers");
 

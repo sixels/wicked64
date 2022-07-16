@@ -91,7 +91,7 @@ impl Status {
     }
 
     /// Get the KSU value as an `ExecutionMode`
-    pub fn get_execution_mode(&self) -> ExecutionMode {
+    pub fn get_execution_mode(&self) -> OperationMode {
         let ksu = self.get_execution_mode_raw();
         debug_assert!(ksu < 3);
         // we are reading only two bits (`BIT_KSU_RANGE.len() == 2`), `ksu` is guaranteed to be a valid ExecutionMode.
@@ -115,14 +115,20 @@ impl Status {
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecutionMode {
+pub enum OperationMode {
     Kernel = 0,
     Supervisor = 1,
     User = 2,
 }
 
-impl From<ExecutionMode> for u8 {
-    fn from(exec_mode: ExecutionMode) -> Self {
+impl Default for OperationMode {
+    fn default() -> Self {
+        Self::Kernel
+    }
+}
+
+impl From<OperationMode> for u8 {
+    fn from(exec_mode: OperationMode) -> Self {
         // Safety: as ExecutionMode is `#[repr(u8)]`, its in-memory
         // representation is asserted to be the same as the primitive u8 type
         unsafe { mem::transmute(exec_mode) }
