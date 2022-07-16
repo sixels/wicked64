@@ -1,7 +1,9 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use byteorder::BigEndian;
-use parking_lot::Mutex;
 
 use crate::{cpu::Cpu, hardware::Cartridge, jit::cache::Cache, mmu::MemoryManager};
 
@@ -43,7 +45,7 @@ impl N64 {
     /// Step the execution of the current running game
     pub fn step(&mut self) {
         let phys_pc = {
-            let cpu = &self.state.lock().cpu;
+            let cpu = &self.state.lock().unwrap().cpu;
             cpu.translate_virtual(cpu.pc as usize) as u64
         };
 
@@ -79,7 +81,7 @@ mod tests {
     fn skip_boot_process<O: ByteOrder>(n64: &N64) {
         tracing::info!("Skipping the boot process");
 
-        let mut state = n64.state().lock();
+        let mut state = n64.state().lock().unwrap();
 
         let cart_rom = *addr_map::phys::CART_D1A2_RANGE.start();
         let header_pc = state.mmu.read::<u32, O>(0x08 + cart_rom);

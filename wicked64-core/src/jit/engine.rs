@@ -30,7 +30,7 @@ struct Jit {
 impl Jit {
     /// Create a new Jit compiler
     pub fn new(state: SyncState) -> Self {
-        let pc = state.lock().cpu.pc;
+        let pc = state.lock().unwrap().cpu.pc;
         tracing::info!("Creating a new JIT");
 
         Self { pc, state, len: 0 }
@@ -55,7 +55,7 @@ impl Jit {
 
         tracing::debug!(
             "Block compiled from pc: ({:08x}..{:08x})",
-            self.state.lock().cpu.pc,
+            self.state.lock().unwrap().cpu.pc,
             self.pc
         );
         // tracing::debug!("Generated code: {compiled:?}");
@@ -68,8 +68,8 @@ impl Jit {
     }
 
     /// Compiles the given instruction and save the generated code into `buf`
-    fn compile_instruction(&self, buf: &mut Vec<u8>, instruction: Instruction) {
-        let state = self.state.lock();
+    fn compile_instruction(&self, code: &mut RawBlock, instruction: Instruction) -> bool {
+        let state = self.state.lock().unwrap();
         let cpu = &state.cpu;
 
         todo!()
