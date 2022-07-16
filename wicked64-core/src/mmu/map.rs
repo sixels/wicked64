@@ -1,6 +1,6 @@
-use std::{collections::BTreeMap, ops::RangeInclusive};
-
 use once_cell::sync::Lazy;
+
+use crate::{map_ranges, utils::btree_range::BTreeRange};
 
 pub mod addr_map {
     use std::ops::RangeInclusive;
@@ -84,100 +84,16 @@ pub mod addr_map {
     }
 }
 
-#[derive(Debug)]
-pub struct RangeMap<T> {
-    inner: BTreeMap<usize, T>,
-}
-
-impl<T> RangeMap<T> {
-    pub fn new() -> Self {
-        Self {
-            inner: BTreeMap::new(),
-        }
-    }
-
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, usize, T> {
-        self.inner.iter()
-    }
-    pub fn values(&self) -> std::collections::btree_map::Values<'_, usize, T> {
-        self.inner.values()
-    }
-
-    pub fn insert(&mut self, start: usize, value: T) {
-        self.inner.insert(start, value);
-    }
-
-    pub fn insert_range_unchecked(&mut self, range: &RangeInclusive<usize>, value: T) {
-        self.insert(*range.start(), value)
-    }
-
-    pub fn get(&self, index: usize) -> Option<&T> {
-        for start in self.inner.keys().rev() {
-            let (_, overflow) = index.overflowing_sub(*start);
-            if !overflow {
-                return self.inner.get(start);
-            }
-        }
-
-        None
-    }
-
-    pub fn get_offset_value(&self, index: usize) -> Option<(usize, &T)> {
-        for start in self.inner.keys().rev() {
-            let (offset, overflow) = index.overflowing_sub(*start);
-            match overflow {
-                true => continue,
-                false => return self.inner.get(start).map(|value| (offset, value)),
-            }
-        }
-
-        None
-    }
-
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        for start in self.inner.keys().rev().copied() {
-            let (_, overflow) = index.overflowing_sub(start);
-            match overflow {
-                true => continue,
-                false => return self.inner.get_mut(&start),
-            }
-        }
-
-        None
-    }
-
-    pub fn get_mut_offset_value(&mut self, index: usize) -> Option<(usize, &mut T)> {
-        for start in self.inner.keys().rev().copied() {
-            let (offset, overflow) = index.overflowing_sub(start);
-            match overflow {
-                true => continue,
-                false => return self.inner.get_mut(&start).map(|value| (offset, value)),
-            }
-        }
-
-        None
-    }
-}
-
-#[macro_export]
-macro_rules! map_ranges {
-    ($( $range:expr => $value:expr , )* ) => {{
-        let mut map = RangeMap::new();
-        $( map.insert_range_unchecked(&$range, $value); )*
-        map
-    }};
-}
-
-static VIRT_MAP: Lazy<RangeMap<VirtualMemoryMap>> = Lazy::new(|| {
+static VIRT_MAP: Lazy<BTreeRange<VirtualMemoryMap>> = Lazy::new(|| {
     use addr_map::virt;
 
-    map_ranges! {
+    map_ranges! [
         virt::KUSEG_RANGE => VirtualMemoryMap::KUSEG,
         virt::KSEG0_RANGE => VirtualMemoryMap::KSEG0,
         virt::KSEG1_RANGE => VirtualMemoryMap::KSEG1,
         virt::KSSEG_RANGE => VirtualMemoryMap::KSSEG,
-        virt::KSEG3_RANGE => VirtualMemoryMap::KSEG3,
-    }
+        virt::KSEG3_RANGE => VirtualMemoryMap::KSEG3
+    ]
 });
 
 #[derive(Debug, Clone, Copy)]

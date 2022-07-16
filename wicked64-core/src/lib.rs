@@ -6,6 +6,7 @@ pub mod hardware;
 pub mod jit;
 pub mod mmu;
 pub mod n64;
+mod utils;
 
 #[cfg(test)]
 mod tests {

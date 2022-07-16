@@ -2,9 +2,9 @@ use std::fmt::Debug;
 
 use byteorder::ByteOrder;
 
-use crate::{hardware::Cartridge, map_ranges};
+use crate::{hardware::Cartridge, map_ranges, utils::btree_range::BTreeRange};
 
-use super::{map::RangeMap, num::MemInteger, MemoryUnit, MemoryUnits};
+use super::{num::MemInteger, MemoryUnit, MemoryUnits};
 
 // 4 megabytes
 pub const RDRAM_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
@@ -12,7 +12,7 @@ pub const RDRAM_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
 /// N64 Memory Management Unit
 #[allow(dead_code)]
 pub struct MemoryManager {
-    units: RangeMap<MemoryUnits>,
+    units: BTreeRange<MemoryUnits>,
     /// 9th bit from RDRAM bytes
     rdram9: Box<[u8]>,
 }
