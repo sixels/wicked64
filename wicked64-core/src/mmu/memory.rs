@@ -90,7 +90,7 @@ impl MemoryUnit for MemoryManager {
         I: MemInteger + Sized + Debug,
         O: ByteOrder + Sized,
     {
-        match self.units.get_mut_offset_value(addr) {
+        match self.units.get_offset_value_mut(addr) {
             Some((offset, unit)) => {
                 unit.store::<I, O>(offset, value);
             }
