@@ -1,4 +1,5 @@
 #[repr(u8)]
+#[derive(Clone, Copy)]
 pub enum X64Gpr {
     Rax,
     Rbx,
@@ -17,3 +18,13 @@ pub enum X64Gpr {
     R14,
     R15,
 }
+
+pub const CALLEE_SAVED_REGISTERS: &[X64Gpr] = &[
+    X64Gpr::Rbx,
+    X64Gpr::Rsi,
+    X64Gpr::Rbp,
+    X64Gpr::R12,
+    X64Gpr::R13,
+    X64Gpr::R14,
+    X64Gpr::R15,
+];
