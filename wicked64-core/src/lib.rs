@@ -2,7 +2,7 @@
 compile_error!("Your CPU does not supports 64-bit integers");
 
 pub mod cpu;
-pub mod hardware;
+pub mod io;
 pub mod jit;
 pub mod mmu;
 pub mod n64;

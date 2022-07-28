@@ -3,7 +3,7 @@ use std::{mem, ops::RangeInclusive};
 use bitvec::{field::BitField, macros::internal::funty::Integral, order::Lsb0, view::BitView};
 
 #[derive(Debug, Default, Clone)]
-pub struct Status {
+pub struct StatusRegister {
     /// (0) IE - Global interrupt enable.
     ///
     /// (1) EXL - Exception Level.
@@ -54,7 +54,7 @@ pub struct Status {
     pub bits: u32,
 }
 
-impl Status {
+impl StatusRegister {
     // Define Status bit offsets and ranges
     pub const BIT_IE_OFFSET: usize = 0;
     pub const BIT_EXL_OFFSET: usize = 1;
@@ -84,7 +84,7 @@ impl Status {
     pub const BIT_CU3_OFFSET: usize = 31;
 
     /// Initialize a new Status register
-    pub fn new() -> Status {
+    pub fn new() -> StatusRegister {
         let bits = 1 << 28;
 
         Self { bits }

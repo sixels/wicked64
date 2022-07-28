@@ -74,7 +74,9 @@ impl<O: ByteOrder> Cpu<O> {
         tracing::debug!("Creating the CPU");
 
         let mut cpu = Self::default().power_on();
-        simulate_pif.then(|| cpu.simulate_pif(mmu));
+        if simulate_pif {
+            cpu.simulate_pif(mmu);
+        }
         cpu
     }
 
@@ -131,11 +133,11 @@ impl<O: ByteOrder> Cpu<O> {
             // CU -> 01111
             // KSU -> kernel (0)
             // the rest is 0 or fixed value.
-            status: cp0::Status { bits: 0x70400004 },
+            status: cp0::StatusRegister { bits: 0x70400004 },
             prid: 0x00000B00,
             // K0 -> cache
             // the rest is 0 or fixed value.
-            config: cp0::Config { bits: 0x0006e463 },
+            config: cp0::ConfigRegister { bits: 0x0006e463 },
 
             ..Cp0::default()
         };
@@ -238,22 +240,22 @@ impl<O: ByteOrder> Cpu<O> {
             let bits = self.cp0.status.bits.view_bits_mut::<Msb0>();
 
             // set ts,sr and rp
-            bits.set(cp0::Status::BIT_TS_OFFSET, false);
-            bits.set(cp0::Status::BIT_SR_OFFSET, false);
-            bits.set(cp0::Status::BIT_RP_OFFSET, false);
+            bits.set(cp0::StatusRegister::BIT_TS_OFFSET, false);
+            bits.set(cp0::StatusRegister::BIT_SR_OFFSET, false);
+            bits.set(cp0::StatusRegister::BIT_RP_OFFSET, false);
 
             // set erl and bev
-            bits.set(cp0::Status::BIT_ERL_OFFSET, true);
-            bits.set(cp0::Status::BIT_BEV_OFFSET, true);
+            bits.set(cp0::StatusRegister::BIT_ERL_OFFSET, true);
+            bits.set(cp0::StatusRegister::BIT_BEV_OFFSET, true);
             // part of the initial status of the processor can be retained
         };
 
         // cp0.config
         {
             let bits = self.cp0.config.bits.view_bits_mut::<Msb0>();
-            bits[cp0::Config::BIT_EP_RANGE].store_be(0u32);
+            bits[cp0::ConfigRegister::BIT_EP_RANGE].store_be(0u32);
 
-            bits.set(cp0::Config::BIT_BE_OFFSET, true);
+            bits.set(cp0::ConfigRegister::BIT_BE_OFFSET, true);
         };
 
         self.cp0.random = 0x1f;
@@ -286,7 +288,7 @@ impl<O: ByteOrder> Cpu<O> {
             self.reset_signal & reset_signal::COLD_RESET_ACTIVE != 0,
             self.reset_signal & reset_signal::RESET_ACTIVE != 0,
         ) {
-            // Both signals are active. Await Cold-Reset to complete, then keep Reset active for 16 clocks.
+            // Both signals are active. Wait Cold-Reset to complete, then keep Reset active for 16 clocks.
             (true, true) => {
                 let rem = dec_cr_clocks(self);
                 if rem == 0 {
@@ -320,12 +322,10 @@ mod tests {
     use bitvec::bits;
     use byteorder::BigEndian;
 
-    use crate::cpu::cp0::status::OperationMode;
-    use crate::cpu::cp0::Config;
-    use crate::hardware::Cartridge;
+    use crate::cpu::cp0::{status::OperationMode, ConfigRegister, StatusRegister};
+    use crate::io::Cartridge;
     use crate::mmu::MemoryManager;
 
-    use super::cp0::Status;
     use super::*;
 
     /// Checks CPU registers after a Power-On reset
@@ -335,8 +335,8 @@ mod tests {
 
         let mut dummy = Box::new([0u8; 100]) as Box<[u8]>;
 
-        tracing::info!("Creating the CPU with dummy memory");
         // create the CPU preventing PIF side effects
+        tracing::info!("Creating the CPU with dummy memory");
         let cpu = Cpu::<BigEndian>::new(false, &mut dummy);
 
         let cp0 = &cpu.cp0;
@@ -347,24 +347,24 @@ mod tests {
         // cp0.status.{ERL, BEV} = 1
         let status_bits = cp0.status.bits.view_bits::<Msb0>();
         assert_eq!(
-            status_bits.get(Status::BIT_TS_OFFSET).as_deref(),
+            status_bits.get(StatusRegister::BIT_TS_OFFSET).as_deref(),
             Some(&false)
         );
         assert_eq!(
-            status_bits.get(Status::BIT_SR_OFFSET).as_deref(),
+            status_bits.get(StatusRegister::BIT_SR_OFFSET).as_deref(),
             Some(&false)
         );
         assert_eq!(
-            status_bits.get(Status::BIT_RP_OFFSET).as_deref(),
+            status_bits.get(StatusRegister::BIT_RP_OFFSET).as_deref(),
             Some(&false)
         );
 
         assert_eq!(
-            status_bits.get(Status::BIT_ERL_OFFSET).as_deref(),
+            status_bits.get(StatusRegister::BIT_ERL_OFFSET).as_deref(),
             Some(&true)
         );
         assert_eq!(
-            status_bits.get(Status::BIT_BEV_OFFSET).as_deref(),
+            status_bits.get(StatusRegister::BIT_BEV_OFFSET).as_deref(),
             Some(&true)
         );
 
@@ -374,11 +374,11 @@ mod tests {
         use bitvec::prelude::*;
         let config_bits = cp0.config.bits.view_bits::<Msb0>();
         assert_eq!(
-            config_bits.get(Config::BIT_EP_RANGE),
+            config_bits.get(ConfigRegister::BIT_EP_RANGE),
             Some(bits![u32, Msb0; 0, 0, 0, 0])
         );
         assert_eq!(
-            config_bits.get(Config::BIT_BE_OFFSET).as_deref(),
+            config_bits.get(ConfigRegister::BIT_BE_OFFSET).as_deref(),
             Some(&true)
         );
         // TODO: cp0.config.EC[2:0] = div_mode[1:0]
@@ -416,9 +416,9 @@ mod tests {
         tracing::info!("Checking Status registers");
 
         let status = &cpu.cp0.status;
-        assert!(status.get_bit(cp0::Status::BIT_ERL_OFFSET));
-        assert!(status.get_bit(cp0::Status::BIT_BEV_OFFSET));
-        assert!(status.get_bits::<u8>(cp0::Status::BIT_CU_RANGE) == 0b0111);
+        assert!(status.get_bit(cp0::StatusRegister::BIT_ERL_OFFSET));
+        assert!(status.get_bit(cp0::StatusRegister::BIT_BEV_OFFSET));
+        assert!(status.get_bits::<u8>(cp0::StatusRegister::BIT_CU_RANGE) == 0b0111);
         assert_eq!(status.get_execution_mode(), OperationMode::Kernel);
 
         tracing::info!("Checking Config registers");
@@ -427,14 +427,14 @@ mod tests {
         assert!(config.get_bits::<u16>(4..=14) == 0b11001000110);
         assert!(config.get_bits::<u8>(16..=23) == 0b00000110);
         assert!(config.get_bit(31) == false);
-        assert!(config.get_bits::<u8>(cp0::Config::BIT_K0_RANGE) == 0b011);
+        assert!(config.get_bits::<u8>(cp0::ConfigRegister::BIT_K0_RANGE) == 0b011);
 
-        tracing::info!("Checking if cartridge headers");
+        tracing::info!("Checking cartridge headers");
 
         let rom_title: Vec<u8> = (0x04000020..0x04000034)
             .map(|i| mmu.read::<u8, BigEndian>(i))
             .collect();
 
-        assert_eq!(b"Dillon's N64 Tests\x20\x20".as_slice(), &rom_title);
+        assert_eq!(b"Dillon's N64 Tests\x20\x20", rom_title.as_slice());
     }
 }

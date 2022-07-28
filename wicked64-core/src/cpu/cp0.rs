@@ -3,7 +3,7 @@
 pub mod config;
 pub mod status;
 
-pub use self::{config::Config, status::Status};
+pub use self::{config::ConfigRegister, status::StatusRegister};
 
 /// MIPS' Coprocessor 0
 ///
@@ -60,7 +60,7 @@ pub struct Cp0 {
     /// Fire an interrupt when `count` equals this value. This interrupt sets
     /// the ip7 bit in `cause` to 1.
     pub compare: u32,
-    pub status: Status,
+    pub status: StatusRegister,
     /// Contains details on the exception or interrupt that occurred. Only the
     /// low two bits of the Interrupt Pending field can be written to using
     /// MTC0, the rest are read-only and set by hardware when an exception is
@@ -68,7 +68,7 @@ pub struct Cp0 {
     pub cause: u32,
     pub epc: u64,
     pub prid: u32,
-    pub config: Config,
+    pub config: ConfigRegister,
     pub ll_addr: u32,
     pub watch_lo: u32,
     pub watch_hi: u32,

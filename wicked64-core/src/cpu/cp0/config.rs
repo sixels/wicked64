@@ -5,7 +5,7 @@ use bitvec::{field::BitField, macros::internal::funty::Integral, order::Lsb0, vi
 /// COP0 Config field
 #[repr(transparent)]
 #[derive(Debug, Default, Clone)]
-pub struct Config {
+pub struct ConfigRegister {
     /// (0..=2) K0 - Kseg0 coherency algorithm. This has the same format as the C field
     /// in EntryLo0 and EntryLo1. The only defined values for K0 for R4300i are
     /// 010 (cache is NOT used), other (cache is used).
@@ -29,7 +29,7 @@ pub struct Config {
     pub bits: u32,
 }
 
-impl Config {
+impl ConfigRegister {
     // Define Config bit offsets and ranges
     pub const BIT_K0_RANGE: RangeInclusive<usize> = 0..=2;
     pub const BIT_CU_OFFSET: usize = 3;

@@ -13,7 +13,7 @@ use enum_dispatch::enum_dispatch;
 pub use memory::MemoryManager;
 
 use self::num::MemInteger;
-use crate::hardware::Cartridge;
+use crate::io::Cartridge;
 
 #[enum_dispatch(MemoryUnit)]
 enum MemoryUnits {

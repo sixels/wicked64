@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use byteorder::ByteOrder;
 
-use crate::{hardware::Cartridge, map_ranges, utils::btree_range::BTreeRange};
+use crate::{io::Cartridge, map_ranges, utils::btree_range::BTreeRange};
 
 use super::{num::MemInteger, MemoryUnit, MemoryUnits};
 
