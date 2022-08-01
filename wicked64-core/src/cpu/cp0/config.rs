@@ -26,7 +26,7 @@ pub struct ConfigRegister {
     /// | 4..=14  | 11001000110  |
     /// | 16..=23 | 00000110     |
     /// | 31      | 0            |
-    pub bits: u32,
+    pub bits: u64,
 }
 
 impl ConfigRegister {

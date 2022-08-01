@@ -51,7 +51,7 @@ pub struct StatusRegister {
     /// | bits     | binary value |
     /// | -------- | ------------ |
     /// | 19 (0)   | 0            |
-    pub bits: u32,
+    pub bits: u64,
 }
 
 impl StatusRegister {
