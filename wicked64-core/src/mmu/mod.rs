@@ -16,6 +16,7 @@ use self::num::MemInteger;
 use crate::io::Cartridge;
 
 #[enum_dispatch(MemoryUnit)]
+#[derive(Debug)]
 enum MemoryUnits {
     BoxedSlice(Box<[u8]>),
     Cartridge,
