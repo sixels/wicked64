@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
@@ -21,7 +20,7 @@ impl CompiledBlock {
         let _state = self.state.borrow_mut();
 
         unsafe {
-            let exec = std::mem::transmute::<_, extern "C" fn() -> usize>(self.mmap.as_ptr());
+            let exec: unsafe extern "C" fn() -> usize = std::mem::transmute(self.mmap.as_ptr());
             exec()
         }
     }
@@ -41,7 +40,7 @@ impl RawBlock {
             code.emit_push_reg(X64Gpr::Rax)?;
             // push callee-saved registers
             for reg in CALLEE_SAVED_REGISTERS {
-                code.emit_push_reg(*reg)?;
+                code.emit_push_reg(reg)?;
             }
 
             Ok(code)
@@ -53,10 +52,8 @@ impl RawBlock {
     /// Generate the compiled block ready to be executed
     pub fn compile(mut self, state: Rc<RefCell<State>>) -> std::io::Result<CompiledBlock> {
         fn map_memory(code: Vec<u8>) -> std::io::Result<Mmap> {
-            let code_len = code.len();
-
-            let mut mmap = MmapMut::map_anon(code_len)?;
-            mmap.as_mut().write(&code)?;
+            let mut mmap = MmapMut::map_anon(code.len())?;
+            mmap.as_mut().copy_from_slice(code.as_slice());
 
             mmap.make_exec()
         }
@@ -67,8 +64,10 @@ impl RawBlock {
             for reg in CALLEE_SAVED_REGISTERS.iter().rev() {
                 code.emit_pop_reg(*reg)?;
             }
-            // pop rax into rcx
+            // pop old rax into rcx
             code.emit_pop_reg(X64Gpr::Rcx)?;
+            // return
+            code.emit_ret()?;
 
             Ok(code)
         }
