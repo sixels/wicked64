@@ -94,3 +94,60 @@ impl DerefMut for RawBlock {
         &mut self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use crate::{cpu::Cpu, io::Cartridge, mmu::MemoryManager};
+
+    use super::*;
+
+    #[test]
+    fn it_should_move_a_value_to_a_register() -> io::Result<()> {
+        let cart = Cartridge::open("../assets/test-roms/dillonb/basic.z64").unwrap();
+        let mut mmu = MemoryManager::new(cart);
+        let cpu = Cpu::new(false, &mut mmu);
+        let state = Rc::new(RefCell::new(State::new(mmu, cpu)));
+
+        let mut code = RawBlock::new()?;
+        let mut bulk = Vec::with_capacity(1000);
+
+        bulk.emit_mov_reg_immediate(X64Gpr::Rax, 1)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::Rbx, 2)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::Rcx, 3)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::Rdx, 4)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::Rdi, 5)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::Rsi, 6)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R8, 7)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R9, 8)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R10, 9)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R11, 10)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R12, 11)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R13, 12)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R14, 13)?;
+        bulk.emit_mov_reg_immediate(X64Gpr::R15, 14)?;
+
+        bulk.emit_assert_reg_eq(X64Gpr::Rax, 1)?;
+        bulk.emit_assert_reg_eq(X64Gpr::Rbx, 2)?;
+        bulk.emit_assert_reg_eq(X64Gpr::Rcx, 3)?;
+        bulk.emit_assert_reg_eq(X64Gpr::Rdx, 4)?;
+        bulk.emit_assert_reg_eq(X64Gpr::Rdi, 5)?;
+        bulk.emit_assert_reg_eq(X64Gpr::Rsi, 6)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R8, 7)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R9, 8)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R10, 9)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R11, 10)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R12, 11)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R13, 12)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R14, 13)?;
+        bulk.emit_assert_reg_eq(X64Gpr::R15, 14)?;
+
+        code.extend_from_slice(&bulk);
+
+        let comp = code.compile(state).unwrap();
+        comp.execute();
+
+        Ok(())
+    }
+}
