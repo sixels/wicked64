@@ -11,6 +11,7 @@ mod utils;
 #[cfg(test)]
 mod tests {
     pub(crate) fn init_trace() {
+        std::env::set_var("RUST_LOG", "debug");
         tracing_subscriber::fmt::init();
     }
 }
