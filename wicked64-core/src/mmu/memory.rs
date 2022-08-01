@@ -10,6 +10,7 @@ use super::{num::MemInteger, MemoryUnit, MemoryUnits};
 pub const RDRAM_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
 
 /// N64 Memory Management Unit
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct MemoryManager {
     units: BTreeRange<MemoryUnits>,
