@@ -119,16 +119,17 @@ pub enum Instruction {
 impl Instruction {
     /// Decode a SPECIAL instruction
     fn decode_special(instruction: u32) -> anyhow::Result<Instruction> {
-        let rtype = RegisterType::new(instruction);
+        let _rtype = RegisterType::new(instruction);
 
-        match SpecialFunct::try_from(rtype.funct) {
-            Ok(funct) => match funct {
-                other => {
-                    anyhow::bail!("Unhandled Special instruction {other:?} (0x{instruction:08x})")
-                }
-            },
-            Err(_) => anyhow::bail!("Unknown Special instruction: 0x{instruction:08x}"),
-        }
+        todo!("Special instructions not implemented")
+        // match SpecialFunct::try_from(rtype.funct) {
+        //     Ok(funct) => match funct {
+        //         other => {
+        //             anyhow::bail!("Unhandled Special instruction {other:?} (0x{instruction:08x})")
+        //         }
+        //     },
+        //     Err(_) => anyhow::bail!("Unknown Special instruction: 0x{instruction:08x}"),
+        // }
     }
 
     /// Decode a COP0 instruction.
@@ -152,7 +153,7 @@ impl Instruction {
     fn decode_cop0(instruction: u32) -> anyhow::Result<Instruction> {
         let rtype = RegisterType::new(instruction);
         // check if "CO" (i.e: bit 4 of `rs`) is 1
-        let decoded = match rtype.rs >> 4 == 1 {
+        let decoded = match rtype.rs & 0x10 == 0x10 {
             true => match Cop0Funct::try_from(rtype.funct) {
                 Ok(Cop0Funct::ERET) => Some(Self::Cop0ERET(rtype)),
                 Ok(Cop0Funct::TLBP) => Some(Self::Cop0TLBP(rtype)),
@@ -173,6 +174,12 @@ impl Instruction {
         decoded.ok_or(anyhow::anyhow!(
             "Unknown COP0 instruction: 0x{instruction:08x}"
         ))
+    }
+
+    pub fn cycles(&self) -> usize {
+        match self {
+            _ => 5,
+        }
     }
 }
 
