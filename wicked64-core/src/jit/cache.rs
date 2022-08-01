@@ -31,13 +31,13 @@ impl Cache {
         block
     }
 
-    /// Check if an arbitrary address is cached
-    pub fn is_addr_compiled(&self, addr: usize) -> bool {
-        match self.compiled_addrs.range(..=addr).last() {
-            Some((_, CacheRange::Start)) => true,
-            _ => false,
-        }
-    }
+    // /// Check if an arbitrary address is cached
+    // pub fn is_addr_compiled(&self, addr: usize) -> bool {
+    //     match self.compiled_addrs.range(..=addr).last() {
+    //         Some((_, CacheRange::Start)) => true,
+    //         _ => false,
+    //     }
+    // }
 }
 
 impl Default for Cache {
