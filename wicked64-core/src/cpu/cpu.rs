@@ -375,7 +375,7 @@ mod tests {
         let config_bits = cp0.config.bits.view_bits::<Msb0>();
         assert_eq!(
             config_bits.get(ConfigRegister::BIT_EP_RANGE),
-            Some(bits![u32, Msb0; 0, 0, 0, 0])
+            Some(bits![u64, Msb0; 0, 0, 0, 0])
         );
         assert_eq!(
             config_bits.get(ConfigRegister::BIT_BE_OFFSET).as_deref(),
