@@ -44,12 +44,14 @@ impl<O: ByteOrder> N64<O> {
         let state = self.state.clone();
         let code = self.cache.get_or_compile(phys_pc, state);
 
+        tracing::info!("Running generated code");
         let clocks = code.execute();
 
         self.clocks += clocks; // TODO
     }
 }
 
+#[derive(Debug)]
 pub struct State {
     pub mmu: MemoryManager,
     pub cpu: Cpu<BigEndian>,
