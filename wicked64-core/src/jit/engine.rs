@@ -1,18 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use hashbrown::{HashMap, HashSet};
-
 use crate::cpu::instruction::{ImmediateType, Instruction};
-use crate::jit::{
-    code::RawBlock,
-    codegen::register::X64Gpr,
-    codegen::Emitter,
-    register::{GuestRegister, HostRegister},
-};
 use crate::n64::State;
 
-use super::code::CompiledBlock;
+use super::code::{CompiledBlock, RawBlock};
+use super::codegen::{register::X64Gpr, Emitter};
+use super::register::{GuestRegister, Registers};
 
 /// Wasm codegen engine
 #[derive(Debug)]
@@ -37,11 +31,7 @@ impl JitEngine {
 struct Jit {
     state: Rc<RefCell<State>>,
     pc: u64,
-    // len: usize,
-    /// Maps a host register to a guest register number
-    registers: HashMap<GuestRegister, HostRegister>,
-    /// Free host registers
-    free_regs: HashSet<X64Gpr>,
+    regs: Registers,
     code: RawBlock,
 }
 
@@ -50,19 +40,12 @@ impl Jit {
     pub fn new(state: Rc<RefCell<State>>) -> Self {
         let pc = { state.borrow().cpu.pc };
 
-        let free_regs = (0u8..15)
-            .map(|r| X64Gpr::try_from(r).unwrap())
-            .filter(|r| !r.is_reserved())
-            .collect();
-
         let code = RawBlock::new().unwrap();
 
         Self {
             pc,
             state,
-            // len: 0,
-            registers: HashMap::new(),
-            free_regs,
+            regs: Registers::new(),
             code,
         }
     }
@@ -134,7 +117,7 @@ impl Jit {
                 // - Move `immediate << 16` into host register
                 let host_rt = self.get_host_cpu_register(rt as usize);
                 self.code
-                    .emit_mov_reg_immediate(host_rt.host_reg, (immediate as u64) << 16)
+                    .emit_mov_reg_immediate(host_rt, (immediate as u64) << 16)
                     .unwrap();
                 false
             }
@@ -150,7 +133,7 @@ impl Jit {
 
                 let tmp_reg = self.get_tmp_register(0);
                 self.code
-                    .emit_mov_reg_immediate(tmp_reg.host_reg, immediate as u64)
+                    .emit_mov_reg_immediate(tmp_reg, immediate as u64)
                     .unwrap();
 
                 // TODO: Implement `emit_or_reg_reg`
@@ -159,17 +142,13 @@ impl Jit {
                     .emit_raw(&[
                         0x48,
                         0x09,
-                        (0b11 << 6)
-                            | ((host_rs.host_reg as u8) << 3)
-                            | ((tmp_reg.host_reg as u8) << 0),
+                        (0b11 << 6) | ((host_rs as u8) << 3) | ((tmp_reg as u8) << 0),
                     ])
                     .unwrap();
 
-                self.code
-                    .emit_mov_reg_reg(host_rt.host_reg, tmp_reg.host_reg)
-                    .unwrap();
+                self.code.emit_mov_reg_reg(host_rt, tmp_reg).unwrap();
 
-                self.drop_reg(tmp_reg);
+                self.regs.drop_host_register(tmp_reg);
 
                 false
             }
@@ -191,79 +170,48 @@ impl Jit {
         data_addr - state_addr
     }
 
-    fn get_host_cpu_register(&mut self, register: usize) -> HostRegister {
+    fn get_host_cpu_register(&mut self, register: usize) -> X64Gpr {
         let host_reg = self.host_reg_from_guest(GuestRegister::Cpu(register));
 
         // load the register value
         let reg_offset = self.offset_of(|state| &state.cpu.gpr[register]);
         self.code
-            .emit_mov_reg_qword_ptr(host_reg.host_reg, reg_offset)
+            .emit_mov_reg_qword_ptr(host_reg, reg_offset)
             .unwrap();
 
         host_reg
     }
-    fn get_tmp_register(&mut self, register: usize) -> HostRegister {
-        let host_reg = self.host_reg_from_guest(GuestRegister::Tmp(register));
-
-        host_reg
+    fn get_tmp_register(&mut self, register: usize) -> X64Gpr {
+        self.host_reg_from_guest(GuestRegister::Tmp(register))
     }
 
     /// Gets an unused host register from a guest one
-    pub fn host_reg_from_guest(&mut self, guest_reg: GuestRegister) -> HostRegister {
-        if let Some(host_reg) = self.registers.get_mut(&guest_reg) {
-            host_reg.frequency += 1;
-            return *host_reg;
-        }
+    pub fn host_reg_from_guest(&mut self, guest_reg: GuestRegister) -> X64Gpr {
+        let offset_of = {
+            let state = self.state.borrow();
+            let state_addr = &*state as *const _ as usize;
 
-        // NOTE: At this point we already know the key does not exist, that's why we call `insert_unique_unchecked`
-        let host_reg = if let Some(&next) = self.free_regs.iter().next().clone() {
-            // we still have free registers
-            let entry = self
-                .registers
-                .insert_unique_unchecked(guest_reg, HostRegister::new(next));
-            *entry.1
-        } else {
-            // TODO: free up the least recently accessed register instead of the least accessed
-            // no free registers available
-            match self
-                .registers
-                .iter()
-                .min_by_key(|(_, HostRegister { frequency, .. })| *frequency)
-            {
-                Some((old_guest_reg, host_reg)) => {
-                    // sync guest with host
-                    {
-                        let old_reg_offset = match *old_guest_reg {
-                            GuestRegister::Cpu(reg) => {
-                                Some(self.offset_of(|state| &state.cpu.gpr[reg]))
-                            }
-                            GuestRegister::Cp0(reg) => {
-                                Some(self.offset_of(|state| state.cpu.cp0.get_register(reg)))
-                            }
-                            GuestRegister::Tmp(_) => None,
-                        };
+            move |rel_offset: &dyn Fn(&State) -> &u64| -> i32 {
+                let data_addr = rel_offset(&state) as *const _ as usize;
+                debug_assert!(state_addr <= data_addr);
 
-                        if let Some(_reg_offset) = old_reg_offset {
-                            todo!("*reg_offset = host_reg")
-                        }
-                    }
-
-                    let entry = self
-                        .registers
-                        .insert_unique_unchecked(guest_reg, HostRegister::new(host_reg.host_reg));
-                    *entry.1
-                }
-                None => unreachable!(),
+                let offset = data_addr - state_addr;
+                debug_assert!(offset <= i32::MAX as _);
+                offset as i32
             }
         };
 
-        self.free_regs.remove(&host_reg.host_reg);
-        host_reg
-    }
+        self.regs
+            .get_mapped_register(guest_reg, |old_guest_reg, host_reg| {
+                let old_guest_reg_offset = match old_guest_reg {
+                    GuestRegister::Cpu(reg) => offset_of(&|state| &state.cpu.gpr[reg]),
+                    GuestRegister::Cp0(reg) => offset_of(&|state| state.cpu.cp0.get_register(reg)),
+                    GuestRegister::Tmp(_) => return,
+                };
 
-    /// Mark a given register as free
-    pub fn drop_reg(&mut self, reg: HostRegister) {
-        let HostRegister { host_reg, .. } = reg;
-        self.free_regs.insert(host_reg);
+                self.code
+                    .emit_mov_rsi_rel_reg(old_guest_reg_offset, host_reg)
+                    .unwrap();
+            })
     }
 }
