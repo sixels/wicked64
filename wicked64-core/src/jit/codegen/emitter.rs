@@ -10,6 +10,7 @@ pub trait Emitter: io::Write {
         self.write(raw_bytes)?;
         Ok(())
     }
+    /// push `reg`
     fn emit_push_reg(&mut self, reg: X64Gpr) -> io::Result<()> {
         let reg_number = reg as u8 % 8;
         if reg >= X64Gpr::R8 {
@@ -17,6 +18,7 @@ pub trait Emitter: io::Write {
         }
         self.write_u8(0x50 + reg_number)
     }
+    /// pop `reg`
     fn emit_pop_reg(&mut self, reg: X64Gpr) -> io::Result<()> {
         let reg_number = reg as u8 % 8;
         if reg >= X64Gpr::R8 {
@@ -24,6 +26,7 @@ pub trait Emitter: io::Write {
         }
         self.write_u8(0x58 + reg_number)
     }
+    /// movabs `reg`, `immediate`
     fn emit_movabs_reg(&mut self, reg: X64Gpr, immediate: u64) -> io::Result<()> {
         let reg_number = reg as u8 % 8;
         let base = if reg >= X64Gpr::R8 { 0x49 } else { 0x48 };
@@ -31,6 +34,7 @@ pub trait Emitter: io::Write {
         self.write(&[base, 0xb8 + reg_number])?;
         self.write_u64::<LittleEndian>(immediate)
     }
+    /// mov `dst`, `src`
     fn emit_mov_reg_reg(&mut self, dst: X64Gpr, src: X64Gpr) -> io::Result<()> {
         let base = match (dst < X64Gpr::R8, src < X64Gpr::R8) {
             (true, true) => 0x48,
@@ -45,6 +49,7 @@ pub trait Emitter: io::Write {
 
         Ok(())
     }
+    /// mov `reg`, `immediate`
     fn emit_mov_reg_immediate(&mut self, reg: X64Gpr, immediate: u64) -> io::Result<()> {
         if immediate > i32::MAX as _ {
             return self.emit_movabs_reg(reg, immediate);
@@ -61,6 +66,7 @@ pub trait Emitter: io::Write {
         }
         self.write_u32::<LittleEndian>(immediate as u32)
     }
+    /// mov `reg`, qword ptr [`offset`]
     fn emit_mov_reg_qword_ptr(&mut self, reg: X64Gpr, offset: usize) -> io::Result<()> {
         let reg_number = reg as u8 % 8;
 
@@ -71,10 +77,10 @@ pub trait Emitter: io::Write {
         self.write(&[base, 0x8b, mod_rm])?;
         self.write_u64::<LittleEndian>(offset as u64)
     }
+    /// ret
     fn emit_ret(&mut self) -> io::Result<()> {
         self.write_u8(0xc3)
     }
-
     fn emit_call_safe<const N: usize, I, O, C: Callable<N, I, O>>(
         &mut self,
         funct: C,
@@ -101,6 +107,8 @@ pub trait Emitter: io::Write {
 
     //-------------- ALU
 
+    // TODO: qword xor (i.e move qword immediate into a register and do a xor a,b)
+    /// xor `reg`, dword `immediate`
     fn emit_xor_reg_dword(&mut self, reg: X64Gpr, immediate: u32) -> io::Result<()> {
         if reg == X64Gpr::Rax {
             self.write(&[0x48, 0x35])?;
