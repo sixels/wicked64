@@ -71,6 +71,18 @@ mod tests {
 
     use super::*;
 
+    /// Test Dillon's N64 tests basic.z64
+    #[test]
+    fn it_should_compile_dillonb_basic_test() {
+        crate::tests::init_trace();
+
+        let mut n64 = N64::<BigEndian>::new("../assets/test-roms/dillonb/basic.z64").unwrap();
+        skip_boot_process(&n64);
+        tracing::info!("Beginning the execution");
+
+        n64.step();
+    }
+
     fn skip_boot_process<O: ByteOrder>(n64: &N64<O>) {
         tracing::info!("Skipping the boot process");
 
@@ -83,17 +95,5 @@ mod tests {
         state.cpu.pc = header_pc as u64;
 
         state.mmu.copy_from(0x00001000, 0x10001000, 0x100000);
-    }
-
-    /// Test Dillon's N64 tests basic.z64
-    #[test]
-    fn it_should_compile_dillonb_basic_test() {
-        crate::tests::init_trace();
-
-        let mut n64 = N64::<BigEndian>::new("../assets/test-roms/dillonb/basic.z64").unwrap();
-        skip_boot_process(&n64);
-        tracing::info!("Beginning the execution");
-
-        n64.step();
     }
 }

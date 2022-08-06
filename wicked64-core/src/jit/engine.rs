@@ -24,7 +24,7 @@ impl JitEngine {
     }
 
     pub fn compile_block(&self, state: Rc<RefCell<State>>) -> (CompiledBlock, usize) {
-        // TODO: Change size to the actual number of cycles it should compile
+        // TODO: Replace this with the actual number of cycles it should compile
         // For testing purposes, we will run a fixed amount of instructions
         let pclock_size = 5;
         let n_instructions = 10 * pclock_size;
@@ -169,9 +169,9 @@ impl Jit {
                     .emit_mov_reg_reg(host_rt.host_reg, tmp_reg.host_reg)
                     .unwrap();
 
-                // TODO: self.drop_register(tmp_reg);
+                self.drop_reg(tmp_reg);
 
-                todo!()
+                false
             }
             _ => todo!("Implement the rest of the instructions"),
         }
@@ -259,5 +259,11 @@ impl Jit {
 
         self.free_regs.remove(&host_reg.host_reg);
         host_reg
+    }
+
+    /// Mark a given register as free
+    pub fn drop_reg(&mut self, reg: HostRegister) {
+        let HostRegister { host_reg, .. } = reg;
+        self.free_regs.insert(host_reg);
     }
 }
