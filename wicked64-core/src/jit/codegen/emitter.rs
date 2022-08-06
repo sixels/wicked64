@@ -77,6 +77,30 @@ pub trait Emitter: io::Write {
         self.write(&[base, 0x8b, mod_rm])?;
         self.write_u64::<LittleEndian>(offset as u64)
     }
+    /// mov qword ptr [`dst`], `src`
+    fn emit_mov_qword_ptr_reg_reg(&mut self, dst: X64Gpr, src: X64Gpr) -> io::Result<()> {
+        let base = match (dst < X64Gpr::R8, src < X64Gpr::R8) {
+            (true, true) => 0x48,
+            (true, false) => 0x4c,
+            (false, true) => 0x4d,
+            (false, false) => 0x49,
+        };
+
+        let s = src as u8 % 8;
+        let d = dst as u8 % 8;
+
+        self.write(&[base, 0x8b, (0b00 << 6) | (s << 3) | (d << 0)])?;
+        Ok(())
+    }
+    /// mov qword ptr [rsi+`offset`], `reg`
+    fn emit_mov_rsi_rel_reg(&mut self, offset: i32, reg: X64Gpr) -> io::Result<()> {
+        let base = if reg >= X64Gpr::R8 { 0x4c } else { 0x48 };
+        let r = reg as u8 % 8;
+
+        self.write(&[base, 0x89, (0b10 << 6) | (r << 3) | (0b110 << 0)])?;
+        self.write_i32::<LittleEndian>(offset)
+    }
+
     /// ret
     fn emit_ret(&mut self) -> io::Result<()> {
         self.write_u8(0xc3)
