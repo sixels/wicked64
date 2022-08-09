@@ -5,7 +5,14 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use super::{callable::Callable, register::X64Gpr};
 
 // TODO: General MOV encoding
-pub trait Emitter: io::Write {
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum CallArg {
+    Val(u64),
+    Reg(X64Gpr),
+}
+
+pub trait Emitter: io::Write + Sized {
     fn emit_raw(&mut self, raw_bytes: &[u8]) -> io::Result<()> {
         self.write(raw_bytes)?;
         Ok(())
@@ -39,8 +46,8 @@ pub trait Emitter: io::Write {
         let base = match (dst < X64Gpr::R8, src < X64Gpr::R8) {
             (true, true) => 0x48,
             (true, false) => 0x4c,
-            (false, true) => 0x4d,
-            (false, false) => 0x49,
+            (false, true) => 0x49,
+            (false, false) => 0x4d,
         };
 
         let s = (src as u8) % 8;
@@ -66,7 +73,7 @@ pub trait Emitter: io::Write {
         }
         self.write_u32::<LittleEndian>(immediate as u32)
     }
-    /// mov `reg`, qword ptr [`offset`]
+    /// mov `reg`, qword ptr \[`offset`\]
     fn emit_mov_reg_qword_ptr(&mut self, reg: X64Gpr, offset: usize) -> io::Result<()> {
         let reg_number = reg as u8 % 8;
 
@@ -75,15 +82,15 @@ pub trait Emitter: io::Write {
         let mod_rm = (0b10 << 6) | (reg_number << 3) | (0b110 << 0);
 
         self.write(&[base, 0x8b, mod_rm])?;
-        self.write_u64::<LittleEndian>(offset as u64)
+        self.write_i32::<LittleEndian>(offset as i32)
     }
-    /// mov qword ptr [`dst`], `src`
+    /// mov qword ptr \[`dst`\], `src`
     fn emit_mov_qword_ptr_reg_reg(&mut self, dst: X64Gpr, src: X64Gpr) -> io::Result<()> {
         let base = match (dst < X64Gpr::R8, src < X64Gpr::R8) {
             (true, true) => 0x48,
             (true, false) => 0x4c,
-            (false, true) => 0x4d,
-            (false, false) => 0x49,
+            (false, true) => 0x49,
+            (false, false) => 0x4d,
         };
 
         let s = src as u8 % 8;
@@ -92,7 +99,7 @@ pub trait Emitter: io::Write {
         self.write(&[base, 0x8b, (0b00 << 6) | (s << 3) | (d << 0)])?;
         Ok(())
     }
-    /// mov qword ptr [rsi+`offset`], `reg`
+    /// mov qword ptr \[rsi+`offset`\], `reg`
     fn emit_mov_rsi_rel_reg(&mut self, offset: i32, reg: X64Gpr) -> io::Result<()> {
         let base = if reg >= X64Gpr::R8 { 0x4c } else { 0x48 };
         let r = reg as u8 % 8;
@@ -108,18 +115,46 @@ pub trait Emitter: io::Write {
     fn emit_call_safe<const N: usize, I, O, C: Callable<N, I, O>>(
         &mut self,
         funct: C,
-        args: &[u64; N],
+        args: &[CallArg; N],
     ) -> io::Result<()> {
         self.emit_call(funct, args)
     }
     fn emit_call<const N: usize, I, O, C: Callable<N, I, O>>(
         &mut self,
         funct: C,
-        args: &[u64],
+        args: &[CallArg],
     ) -> io::Result<()> {
         static ARGS_REGS: &[X64Gpr] = &[X64Gpr::Rdi, X64Gpr::Rsi, X64Gpr::Rdx, X64Gpr::Rcx];
-        for (&reg, &arg) in ARGS_REGS.iter().zip(args) {
-            self.emit_movabs_reg(reg, arg)?;
+        static AUX_REGS: &[X64Gpr] = &[X64Gpr::Rax, X64Gpr::Rbx];
+
+        // organize the registers so we don't write to a register before reading its value
+        let reg_has_deps = |reg: X64Gpr| args.contains(&CallArg::Reg(reg)).then(|| reg);
+        let arg_has_deps = |arg: &CallArg| match *arg {
+            CallArg::Val(_) => None,
+            CallArg::Reg(r) => reg_has_deps(r),
+        };
+
+        let mut save = Vec::new();
+        let mut aux_iter = AUX_REGS.iter();
+        for (dependency, dependent) in ARGS_REGS.iter().zip(args) {
+            match arg_has_deps(dependent) {
+                Some(reg) => {
+                    // TODO: Save the original register value to the stack
+                    let aux = *aux_iter.next().unwrap();
+                    save.push((dependency, aux));
+                    self.emit_push_reg(aux)?;
+                    self.emit_mov_reg_reg(aux, reg)?;
+                    self.emit_mov_reg_reg(*dependency, reg)?;
+                }
+                _ => {}
+            }
+        }
+
+        for (&reg, &arg) in ARGS_REGS.iter().zip(args).rev() {
+            match arg {
+                CallArg::Val(val) => self.emit_movabs_reg(reg, val)?,
+                CallArg::Reg(src) => self.emit_mov_reg_reg(reg, src)?,
+            }
         }
         let funct_addr = funct.addr();
 
@@ -146,6 +181,35 @@ pub trait Emitter: io::Write {
         self.write_u32::<LittleEndian>(immediate)
     }
 
+    fn emit_or_reg_reg(&mut self, a: X64Gpr, b: X64Gpr) -> io::Result<()> {
+        let base = match (a < X64Gpr::R8, b < X64Gpr::R8) {
+            (true, true) => 0x48,
+            (true, false) => 0x4c,
+            (false, true) => 0x49,
+            (false, false) => 0x4d,
+        };
+
+        let a = a as u8 % 8;
+        let b = b as u8 % 8;
+
+        self.write(&[base, 0x09, (0b11 << 6) | (b << 3) | (a << 0)])?;
+        Ok(())
+    }
+    fn emit_add_reg_reg(&mut self, a: X64Gpr, b: X64Gpr) -> io::Result<()> {
+        let base = match (a < X64Gpr::R8, b < X64Gpr::R8) {
+            (true, true) => 0x48,
+            (true, false) => 0x4c,
+            (false, true) => 0x49,
+            (false, false) => 0x4d,
+        };
+
+        let a = a as u8 % 8;
+        let b = b as u8 % 8;
+
+        self.write(&[base, 0x01, (0b11 << 6) | (b << 3) | (a << 0)])?;
+        Ok(())
+    }
+
     #[cfg(test)]
     fn emit_assert_reg_eq(&mut self, reg: X64Gpr, expected: u64) -> io::Result<()> {
         fn assert_eq_wrapper(reg: X64Gpr, expected: u64, actual: u64) {
@@ -170,9 +234,14 @@ pub trait Emitter: io::Write {
             self.emit_push_reg(*reg).unwrap();
         }
 
-        self.emit_mov_reg_reg(X64Gpr::Rdx, reg)?;
-        // pass only two arguments as we already passed the third one (on RDX)
-        self.emit_call(assert_eq_wrapper as fn(_, _, _), &[reg as u64, expected])?;
+        self.emit_call(
+            assert_eq_wrapper as fn(_, _, _),
+            &[
+                CallArg::Val(reg as u64),
+                CallArg::Val(expected),
+                CallArg::Reg(reg),
+            ],
+        )?;
 
         for reg in save_regs.iter().rev() {
             self.emit_pop_reg(*reg).unwrap();
