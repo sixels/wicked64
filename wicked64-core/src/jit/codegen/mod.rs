@@ -1,5 +1,5 @@
+pub mod callable;
 mod emitter;
 pub mod register;
-pub mod callable;
 
-pub use emitter::Emitter;
+pub use emitter::{CallArg, Emitter};
