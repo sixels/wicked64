@@ -20,8 +20,12 @@ impl CompiledBlock {
         let _state = self.state.borrow_mut();
 
         unsafe {
-            let exec: unsafe extern "C" fn() -> usize = std::mem::transmute(self.mmap.as_ptr());
-            exec()
+            let code = self.mmap.iter().collect::<Vec<&u8>>();
+            tracing::debug!("{code:02x?}");
+
+            let exec: unsafe extern "C" fn() -> () = std::mem::transmute(self.mmap.as_ptr());
+            exec();
+            0
         }
     }
 }
