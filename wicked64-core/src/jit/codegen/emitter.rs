@@ -210,41 +210,48 @@ pub trait Emitter: io::Write + Sized {
         args: &[CallArg],
     ) -> io::Result<()> {
         static ARGS_REGS: &[X64Gpr] = &[X64Gpr::Rdi, X64Gpr::Rsi, X64Gpr::Rdx, X64Gpr::Rcx];
-        static AUX_REGS: &[X64Gpr] = &[X64Gpr::Rax, X64Gpr::Rbx];
 
         // organize the registers so we don't write to a register before reading its value
         let reg_has_deps = |reg: X64Gpr| args.contains(&CallArg::Reg(reg)).then(|| reg);
-        let arg_has_deps = |arg: &CallArg| match *arg {
-            CallArg::Val(_) => None,
-            CallArg::Reg(r) => reg_has_deps(r),
-        };
 
         let mut save = Vec::new();
-        let mut aux_iter = AUX_REGS.iter();
-        for (dependency, dependent) in ARGS_REGS.iter().zip(args) {
-            match arg_has_deps(dependent) {
-                Some(reg) => {
-                    // TODO: Save the original register value to the stack
-                    let aux = *aux_iter.next().unwrap();
-                    save.push((dependency, aux));
-                    self.emit_push_reg(aux)?;
-                    self.emit_mov_reg_reg(aux, reg)?;
-                    self.emit_mov_reg_reg(*dependency, reg)?;
+        // we will store a max of 32 bytes in the stack, as we only handle 4 arguments
+        let stack_size = 8 * args.len();
+        let mut stack_index = stack_size as i32;
+
+        self.emit_sub_reg_dword(X64Gpr::Rsp, stack_size as u32)?;
+
+        for (&dst, &src) in ARGS_REGS.iter().zip(args) {
+            match src {
+                CallArg::Reg(src) => {
+                    if let Some(_) = reg_has_deps(dst) {
+                        stack_index -= 8;
+                        save.push((dst, stack_index));
+                        todo!()
+                        // self.emit_mov_qword_ptr_reg_reg(X64Gpr::Rsp, dst, stack_index)?;
                 }
-                _ => {}
+                    self.emit_mov(AddressingMode::Register(dst), AddressingMode::Register(src))?;
             }
+                CallArg::Val(v) => self.emit_movabs_reg(dst, v)?,
+            };
         }
 
         for (&reg, &arg) in ARGS_REGS.iter().zip(args).rev() {
             match arg {
                 CallArg::Val(val) => self.emit_movabs_reg(reg, val)?,
-                CallArg::Reg(src) => self.emit_mov_reg_reg(reg, src)?,
+                CallArg::Reg(src) => self.emit_mov(AddressingMode::Register(reg), AddressingMode::Register(src))?,
             }
         }
         let funct_addr = funct.addr();
 
         self.emit_movabs_reg(X64Gpr::Rax, funct_addr as u64)?;
-        self.write(&[0xff, 0xd0])?;
+        self.write(&[0xff, 0xd0])?; // call rax
+
+        for (reg, index) in save {
+            todo!()
+            // self.emit_mov_reg_qword_ptr(reg, offset);
+        }
+        self.emit_add_reg_dword(X64Gpr::Rsp, stack_size as u32)?;
 
         Ok(())
     }
