@@ -12,9 +12,98 @@ pub enum CallArg {
     Reg(X64Gpr),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum AddressingMode {
+    Immediate(u64),
+    Register(X64Gpr),
+    Direct(i32),
+    Indirect(X64Gpr),
+    IndirectDisplacement(X64Gpr, i32),
+}
+
 pub trait Emitter: io::Write + Sized {
     fn emit_raw(&mut self, raw_bytes: &[u8]) -> io::Result<()> {
         self.write(raw_bytes)?;
+        Ok(())
+    }
+    fn emit_mov(&mut self, dst: AddressingMode, src: AddressingMode) -> io::Result<()> {
+        #[cfg(debug_assertions)]
+        match dst {
+            AddressingMode::Register(X64Gpr::Rsp) | AddressingMode::Immediate(_) => {
+                panic!("Invalid or unhandled destination for `mov` instruction: {dst:?}")
+            }
+            _ => {}
+        }
+
+        match (dst, src) {
+            (AddressingMode::Register(dst), AddressingMode::Register(src)) => {
+                debug_assert!(dst != X64Gpr::Rsp);
+                let base = (0b1001 << 3)
+                    | (u8::from(src >= X64Gpr::R8) << 2)
+                    | (u8::from(dst >= X64Gpr::R8) << 0);
+
+                let s = (src as u8) % 8;
+                let d = (dst as u8) % 8;
+                let mod_rm = (0b11 << 6) | (s << 3) | (d << 0);
+
+                self.write(&[base, 0x89, mod_rm])?;
+            }
+            (AddressingMode::Register(dst), AddressingMode::Immediate(im)) => {
+                debug_assert!(dst != X64Gpr::Rsp);
+                let dst_n = (dst as u8) % 8;
+
+                let base = dst_n + 0xb8;
+                let im = im as i32;
+
+                if dst >= X64Gpr::R8 {
+                    self.write_u8(0x41)?;
+                }
+                self.write_u8(base)?;
+                self.write_i32::<LittleEndian>(im)?;
+            }
+            (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
+                debug_assert!(dst != X64Gpr::Rsp);
+                let base = (0b1001 << 3) | (u8::from(dst >= X64Gpr::R8) << 2);
+
+                let d = (dst as u8) % 8;
+                let mod_rm = (0b00 << 6) | (d << 3) | (0b100 << 0);
+
+                self.write(&[base, 0x8b, mod_rm, 0x25])?;
+                self.write_i32::<LittleEndian>(addr)?;
+            }
+            (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
+                debug_assert!(dst != X64Gpr::Rsp);
+                let base = (0b1001 << 3)
+                    | (u8::from(dst >= X64Gpr::R8) << 2)
+                    | (u8::from(src >= X64Gpr::R8) << 0);
+
+                let s = (src as u8) % 8;
+                let d = (dst as u8) % 8;
+                let mod_rm = (0b00 << 6) | (d << 3) | (s << 0);
+
+                self.write(&[base, 0x8b, mod_rm])?;
+                if src == X64Gpr::Rsp {
+                    self.write_u8(0x24)?;
+                }
+            }
+            (AddressingMode::Register(dst), AddressingMode::IndirectDisplacement(src, disp)) => {
+                debug_assert!(dst != X64Gpr::Rsp);
+                let base = (0b1001 << 3)
+                    | (u8::from(dst >= X64Gpr::R8) << 2)
+                    | (u8::from(src >= X64Gpr::R8) << 0);
+
+                let s = (src as u8) % 8;
+                let d = (dst as u8) % 8;
+                let mod_rm = (0b10 << 6) | (d << 3) | (s << 0);
+
+                self.write(&[base, 0x8b, mod_rm])?;
+                if src == X64Gpr::Rsp {
+                    self.write_u8(0x24)?;
+                }
+                self.write_i32::<LittleEndian>(disp)?;
+            }
+            _ => unimplemented!(),
+        };
         Ok(())
     }
     /// push `reg`
