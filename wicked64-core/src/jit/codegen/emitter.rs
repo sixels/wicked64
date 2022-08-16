@@ -229,9 +229,9 @@ pub trait Emitter: io::Write + Sized {
                         save.push((dst, stack_index));
                         todo!()
                         // self.emit_mov_qword_ptr_reg_reg(X64Gpr::Rsp, dst, stack_index)?;
-                }
+                    }
                     self.emit_mov(AddressingMode::Register(dst), AddressingMode::Register(src))?;
-            }
+                }
                 CallArg::Val(v) => self.emit_movabs_reg(dst, v)?,
             };
         }
