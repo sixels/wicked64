@@ -267,7 +267,20 @@ pub trait Emitter: io::Write + Sized {
         }
 
         let base = if reg >= X64Gpr::R8 { 0x49 } else { 0x48 };
-        let mod_rm = (0b11110 << 3) | (reg as u8) % 8;
+        let mod_rm = (0b11_110 << 3) | (reg as u8) % 8;
+
+        self.write(&[base, 0x81, mod_rm])?;
+        self.write_u32::<LittleEndian>(immediate)
+    }
+
+    fn emit_sub_reg_dword(&mut self, reg: X64Gpr, immediate: u32) -> io::Result<()> {
+        if reg == X64Gpr::Rax {
+            self.write(&[0x48, 0x2d])?;
+            return self.write_u32::<LittleEndian>(immediate);
+        }
+
+        let base = if reg >= X64Gpr::R8 { 0x49 } else { 0x48 };
+        let mod_rm = (0b11_101 << 3) | (reg as u8) % 8;
 
         self.write(&[base, 0x81, mod_rm])?;
         self.write_u32::<LittleEndian>(immediate)
