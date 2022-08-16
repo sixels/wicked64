@@ -130,21 +130,6 @@ pub trait Emitter: io::Write + Sized {
         self.write(&[base, 0xb8 + reg_number])?;
         self.write_u64::<LittleEndian>(immediate)
     }
-    /// mov `dst`, `src`
-    fn emit_mov_reg_reg(&mut self, dst: X64Gpr, src: X64Gpr) -> io::Result<()> {
-        let base = match (dst < X64Gpr::R8, src < X64Gpr::R8) {
-            (true, true) => 0x48,
-            (true, false) => 0x4c,
-            (false, true) => 0x49,
-            (false, false) => 0x4d,
-        };
-
-        let s = (src as u8) % 8;
-        let d = (dst as u8) % 8;
-        self.write(&[base, 0x89, (0b11 << 6) | (s << 3) | (d << 0)])?;
-
-        Ok(())
-    }
     /// mov `reg`, `immediate`
     fn emit_mov_reg_immediate(&mut self, reg: X64Gpr, immediate: u64) -> io::Result<()> {
         if immediate > i32::MAX as _ {
