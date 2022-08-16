@@ -8,6 +8,7 @@ use crate::mmu::MemoryUnit;
 use crate::n64::State;
 
 use super::code::{CompiledBlock, RawBlock};
+use super::codegen::AddressingMode;
 use super::codegen::callable::Callable;
 use super::codegen::register::CALLEE_SAVED_REGISTERS;
 use super::codegen::{register::X64Gpr, Emitter};
@@ -183,7 +184,12 @@ impl Jit {
                 // TODO: Implement `emit_or_reg_reg`
                 // or host_rs, tmp_reg
                 self.code.emit_or_reg_reg(tmp_reg, host_rs).unwrap();
-                self.code.emit_mov_reg_reg(host_rt, tmp_reg).unwrap();
+                self.code
+                    .emit_mov(
+                        AddressingMode::Register(host_rt),
+                        AddressingMode::Register(tmp_reg),
+                    )
+                    .unwrap();
 
                 self.regs.drop_guest_register(GuestRegister::Tmp(0));
 
@@ -219,7 +225,12 @@ impl Jit {
                 self.sync_guest_register(X64Gpr::Rdx);
                 self.code.emit_push_reg(X64Gpr::Rsi).unwrap();
                 let rt = self.get_host_cpu_register(rt as usize);
-                self.code.emit_mov_reg_reg(X64Gpr::Rdx, rt).unwrap();
+                self.code
+                    .emit_mov(
+                        AddressingMode::Register(X64Gpr::Rdx),
+                        AddressingMode::Register(rt),
+                    )
+                    .unwrap();
                 self.emit_call_wrapper(
                     mmu_store as fn(_, _, _),
                     &[
@@ -258,7 +269,12 @@ impl Jit {
         }
 
         self.code.emit_call(funct, args).unwrap();
-        return_to.map(|ret| self.code.emit_mov_reg_reg(ret, X64Gpr::Rax));
+        return_to.map(|ret| {
+            self.code.emit_mov(
+                AddressingMode::Register(ret),
+                AddressingMode::Register(X64Gpr::Rax),
+            )
+        });
 
         for host in tmp_regs.into_iter() {
             self.code.emit_pop_reg(host).unwrap();
