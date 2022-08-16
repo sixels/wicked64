@@ -158,19 +158,30 @@ pub trait Emitter: io::Write + Sized {
         self.write(&[base, 0x8b, mod_rm])?;
         self.write_i32::<LittleEndian>(offset as i32)
     }
-    /// mov qword ptr \[`dst`\], `src`
-    fn emit_mov_qword_ptr_reg_reg(&mut self, dst: X64Gpr, src: X64Gpr) -> io::Result<()> {
+    /// mov qword ptr \[`dst` + `displacement`\], `src`
+    fn emit_mov_qword_ptr_reg_reg(
+        &mut self,
+        dst: X64Gpr,
+        src: X64Gpr,
+        displacement: i32,
+    ) -> io::Result<()> {
         let base = match (dst < X64Gpr::R8, src < X64Gpr::R8) {
             (true, true) => 0x48,
             (true, false) => 0x4c,
             (false, true) => 0x49,
             (false, false) => 0x4d,
         };
+        let op = if displacement == 0 { 0x8b } else { 0x89 };
 
         let s = src as u8 % 8;
         let d = dst as u8 % 8;
+        let mod_rm = (((displacement != 0) as u8) << 7) | (s << 3) | (d << 0);
 
-        self.write(&[base, 0x8b, (0b00 << 6) | (s << 3) | (d << 0)])?;
+        self.write(&[base, op, mod_rm])?;
+        if displacement != 0 {
+            self.write_i32::<LittleEndian>(displacement)?;
+        }
+
         Ok(())
     }
     /// mov qword ptr \[rsi+`offset`\], `reg`
