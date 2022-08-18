@@ -22,10 +22,10 @@ pub enum Register {
     R15 = 15,
 }
 
-impl Parse for Register {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let reg = input.parse::<Ident>()?;
-        let reg = match reg.to_string().as_str() {
+impl TryFrom<&str> for Register {
+    type Error = ();
+    fn try_from(reg_str: &str) -> Result<Self, Self::Error> {
+        let reg = match reg_str {
             "rax" => Self::Rax,
             "rcx" => Self::Rcx,
             "rdx" => Self::Rdx,
@@ -42,8 +42,18 @@ impl Parse for Register {
             "r13" => Self::R13,
             "r14" => Self::R14,
             "r15" => Self::R15,
-            _ => return Err(syn::Error::new(reg.span(), "Invalid register name")),
+            _ => return Err(()),
         };
         Ok(reg)
+    }
+}
+
+impl Parse for Register {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let reg = input.parse::<Ident>()?;
+        reg.to_string()
+            .as_str()
+            .try_into()
+            .map_err(|_| syn::Error::new(reg.span(), "Invalid register name"))
     }
 }
