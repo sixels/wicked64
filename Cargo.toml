@@ -7,4 +7,4 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [workspace]
-members = ["wicked64-core"]
+members = ["wicked64-core", "wicked64-codegen-macro"]
