@@ -1,0 +1,84 @@
+use proc_macro2::Punct;
+use syn::{
+    bracketed,
+    parse::{Parse, ParseStream},
+    token::Bracket,
+    Ident, LitInt, Token,
+};
+
+use crate::register::Register;
+
+pub enum AddressingMode {
+    Immediate(AddrImmediate),
+    Register(Register),
+    Direct(AddrDirect),
+    Indirect(AddrIndirect),
+}
+
+impl Parse for AddressingMode {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+
+        if lookahead.peek(LitInt) {
+            input.parse().map(Self::Immediate)
+        } else if lookahead.peek(Ident) {
+            input.parse().map(Self::Register)
+        } else if lookahead.peek(Bracket) {
+            input
+                .parse()
+                .map(Self::Indirect)
+                .or_else(|_| input.parse().map(Self::Direct))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+pub struct AddrIndirect {
+    _bracket: Bracket,
+    pub reg: Register,
+    pub disp: i32,
+}
+
+impl Parse for AddrIndirect {
+    /// Match `[register + displacement] || [registers]`.
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            _bracket: bracketed!(content in input),
+            reg: content.parse()?,
+            disp: {
+                if content.peek(Token![+]) || content.peek(Token![-]) {
+                    let sign = i32::from(content.parse::<Punct>()?.as_char() == '-') * -1;
+                    content.parse::<LitInt>()?.base10_parse::<i32>()? * sign
+                } else {
+                    0
+                }
+            },
+        })
+    }
+}
+
+pub struct AddrDirect {
+    _bracket: Bracket,
+    pub addr: i32,
+}
+
+impl Parse for AddrDirect {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            _bracket: bracketed!(content in input),
+            addr: content.parse::<LitInt>()?.base10_parse()?,
+        })
+    }
+}
+
+#[repr(transparent)]
+pub struct AddrImmediate(pub u64);
+
+impl Parse for AddrImmediate {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self(input.parse::<LitInt>()?.base10_parse()?))
+    }
+}
