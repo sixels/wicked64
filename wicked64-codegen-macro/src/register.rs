@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use proc_macro2::Ident;
 use syn::parse::Parse;
 
@@ -55,5 +57,29 @@ impl Parse for Register {
             .as_str()
             .try_into()
             .map_err(|_| syn::Error::new(reg.span(), "Invalid register name"))
+    }
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let reg = match self {
+            Register::Rax => "rax",
+            Register::Rcx => "rcx",
+            Register::Rdx => "rdx",
+            Register::Rbx => "rbx",
+            Register::Rsp => "rsp",
+            Register::Rbp => "rbp",
+            Register::Rsi => "rsi",
+            Register::Rdi => "rdi",
+            Register::R8 => "r8",
+            Register::R9 => "r9",
+            Register::R10 => "r10",
+            Register::R11 => "r11",
+            Register::R12 => "r12",
+            Register::R13 => "r13",
+            Register::R14 => "r14",
+            Register::R15 => "r15",
+        };
+        write!(f, "{reg}")
     }
 }
