@@ -1,6 +1,7 @@
 use std::{cmp::Ordering, fmt::Display};
 
 use proc_macro2::Punct;
+use quote::ToTokens;
 use syn::{
     bracketed,
     parse::{Parse, ParseStream},
@@ -12,7 +13,7 @@ use crate::register::Register;
 
 pub enum AddressingMode {
     Immediate(AddrImmediate),
-    Register(Register),
+    Register(AddrRegister),
     Direct(AddrDirect),
     Indirect(AddrIndirect),
 }
@@ -30,20 +31,35 @@ impl Parse for AddressingMode {
                 .parse()
                 .map(Self::Indirect)
                 .or_else(|_| input.parse().map(Self::Direct))
+        } else if lookahead.peek(Token![$]) {
+            input.parse().map(Self::Register)
         } else {
             Err(lookahead.error())
         }
     }
 }
 
+/// Immediate addressing mode
 #[repr(transparent)]
 pub struct AddrImmediate(pub u64);
 
+/// Register addressing mode
+pub enum AddrRegister {
+    /// Matches a register inside a variable (e.g: `let reg = 0; push $reg`).
+    /// The variable must be an integer.
+    Var(Ident),
+    /// Matches a register literal (e.g: `push rax`).
+    /// The literal must be a valid register name
+    Lit(Register),
+}
+
+/// Direct addressing mode
 pub struct AddrDirect {
     _bracket: Bracket,
     pub addr: i32,
 }
 
+/// Indirect addressing mode
 pub struct AddrIndirect {
     _bracket: Bracket,
     pub reg: Register,
@@ -53,6 +69,21 @@ pub struct AddrIndirect {
 impl Parse for AddrImmediate {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Ok(Self(input.parse::<LitInt>()?.base10_parse()?))
+    }
+}
+
+impl Parse for AddrRegister {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let look_ahead = input.lookahead1();
+
+        if look_ahead.peek(Token![$]) {
+            input.parse::<Token![$]>()?;
+            input.parse().map(Self::Var)
+        } else if look_ahead.peek(Ident) {
+            input.parse().map(Self::Lit)
+        } else {
+            Err(look_ahead.error())
+        }
     }
 }
 
@@ -85,6 +116,15 @@ impl Parse for AddrIndirect {
     }
 }
 
+impl ToTokens for AddrRegister {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            AddrRegister::Var(var) => var.to_tokens(tokens),
+            AddrRegister::Lit(reg) => reg.to_tokens(tokens),
+        }
+    }
+}
+
 impl Display for AddressingMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -100,6 +140,15 @@ impl Display for AddrImmediate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let imm = self.0;
         write!(f, "0x{imm:08x}")
+    }
+}
+
+impl Display for AddrRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Var(var) => var.fmt(f),
+            Self::Lit(reg) => reg.fmt(f),
+        }
     }
 }
 
