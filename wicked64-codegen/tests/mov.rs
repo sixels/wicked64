@@ -13,9 +13,9 @@ fn mov_reg_reg() {
         mov r9, rax;
         mov rcx, rbx;
         mov r9, r11;
-        mov r9, $rax;
-        mov $r9, rax;
-        mov $r9, $rax;
+        mov r9, %rax;
+        mov %r9, rax;
+        mov %r9, %rax;
     );
 
     assert_eq!(
@@ -46,8 +46,9 @@ fn mov_reg_immediate() {
         mov r11, 0x3412;
         mov rax, 0x3412;
         mov r8, 0x3412;
-        mov $r11, 0x3412;
+        mov %r11, 0x3412;
         mov r11, $val;
+        mov %r11, $val;
     );
 
     assert_eq!(
@@ -59,6 +60,7 @@ fn mov_reg_immediate() {
             0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
             0xb8, 0x12, 0x34, 0x00, 0x00, // mov rax, 0x3412
             0x41, 0xb8, 0x12, 0x34, 0x00, 0x00, // mov r8, 0x3412
+            0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
             0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
             0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
         ]

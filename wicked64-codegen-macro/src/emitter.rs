@@ -34,7 +34,6 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
         (AddressingMode::Register(dst), AddressingMode::Immediate(imm)) => {
             // debug_assert!(dst != Register::Rsp);
 
-            let imm = imm.0;
             let r8 = Register::R8;
 
             quote! {

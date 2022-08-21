@@ -22,17 +22,15 @@ impl Parse for AddressingMode {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
 
-        if lookahead.peek(LitInt) {
+        if lookahead.peek(LitInt) || lookahead.peek(Token![$]) {
             input.parse().map(Self::Immediate)
-        } else if lookahead.peek(Ident) {
+        } else if lookahead.peek(Ident) || lookahead.peek(Token![%]) {
             input.parse().map(Self::Register)
         } else if lookahead.peek(Bracket) {
             input
                 .parse()
                 .map(Self::Indirect)
                 .or_else(|_| input.parse().map(Self::Direct))
-        } else if lookahead.peek(Token![$]) {
-            input.parse().map(Self::Register)
         } else {
             Err(lookahead.error())
         }
@@ -40,16 +38,22 @@ impl Parse for AddressingMode {
 }
 
 /// Immediate addressing mode
-#[repr(transparent)]
-pub struct AddrImmediate(pub u64);
+pub enum AddrImmediate {
+    /// Matches an immediate inside a variable (e.g `let val = 0x1234; mov rax, $val`).
+    /// The variable's type must be u64
+    Var(Ident),
+    /// Matches a immediate literal (e.g: `mov rax, 0x1234`).
+    /// The literal must be a valid u64
+    Lit(u64),
+}
 
 /// Register addressing mode
 pub enum AddrRegister {
-    /// Matches a register inside a variable (e.g: `let reg = 0; push $reg`).
-    /// The variable must be an integer.
+    /// Matches a register inside a variable (e.g: `let reg = 0; push %reg`).
+    /// The variable must be a valid integer.
     Var(Ident),
     /// Matches a register literal (e.g: `push rax`).
-    /// The literal must be a valid register name
+    /// The literal must be a valid register name.
     Lit(Register),
 }
 
@@ -68,7 +72,19 @@ pub struct AddrIndirect {
 
 impl Parse for AddrImmediate {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self(input.parse::<LitInt>()?.base10_parse()?))
+        let look_ahead = input.lookahead1();
+
+        if look_ahead.peek(Token![$]) {
+            input.parse::<Token![$]>()?;
+            input.parse().map(Self::Var)
+        } else if look_ahead.peek(LitInt) {
+            input
+                .parse::<LitInt>()
+                .and_then(|imm| imm.base10_parse())
+                .map(Self::Lit)
+        } else {
+            Err(look_ahead.error())
+        }
     }
 }
 
@@ -76,8 +92,8 @@ impl Parse for AddrRegister {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let look_ahead = input.lookahead1();
 
-        if look_ahead.peek(Token![$]) {
-            input.parse::<Token![$]>()?;
+        if look_ahead.peek(Token![%]) {
+            input.parse::<Token![%]>()?;
             input.parse().map(Self::Var)
         } else if look_ahead.peek(Ident) {
             input.parse().map(Self::Lit)
@@ -119,8 +135,17 @@ impl Parse for AddrIndirect {
 impl ToTokens for AddrRegister {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
-            AddrRegister::Var(var) => var.to_tokens(tokens),
-            AddrRegister::Lit(reg) => reg.to_tokens(tokens),
+            Self::Var(var) => var.to_tokens(tokens),
+            Self::Lit(reg) => reg.to_tokens(tokens),
+        }
+    }
+}
+
+impl ToTokens for AddrImmediate {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            Self::Var(var) => var.to_tokens(tokens),
+            Self::Lit(imm) => imm.to_tokens(tokens),
         }
     }
 }
@@ -138,8 +163,10 @@ impl Display for AddressingMode {
 
 impl Display for AddrImmediate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let imm = self.0;
-        write!(f, "0x{imm:08x}")
+        match self {
+            Self::Var(var) => var.fmt(f),
+            Self::Lit(imm) => imm.fmt(f),
+        }
     }
 }
 
