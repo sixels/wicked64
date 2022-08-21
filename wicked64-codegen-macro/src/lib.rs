@@ -6,7 +6,7 @@ mod addressing;
 use instruction::Instruction;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, Ident};
+use syn::{parse::Parse, parse_macro_input, Ident, Token};
 
 struct Emit {
     buffer: Ident,
@@ -16,6 +16,7 @@ struct Emit {
 impl Parse for Emit {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let buffer = input.parse()?;
+        input.parse::<Token![,]>()?;
         let mut instructions = Vec::new();
         while !input.is_empty() {
             instructions.push(input.parse()?);
