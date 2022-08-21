@@ -21,8 +21,8 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             let r8 = Register::R8;
             quote! {
                 let base = (0b1001 << 3)
-                    | (u8::from(#src >= #r8) << 2)
-                    | (u8::from(#dst >= #r8) << 0);
+                    | (u8::from(#src as u8 >= #r8) << 2)
+                    | (u8::from(#dst as u8 >= #r8) << 0);
 
                 let s = (#src as u8) % 8;
                 let d = (#dst as u8) % 8;
@@ -41,16 +41,12 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 let dst_n = (#dst as u8) % 8;
 
                 let base = dst_n + 0xb8;
-                let imm = #imm as i32;
 
-                let mut ts = TokenStream::new();
-                if dst >= #r8 {
-                    ts.extend(quote! {
-                        buf.emit_byte(0x41);
-                    })
+                if #dst as u8 >= #r8 {
+                    buf.emit_byte(0x41);
                 }
                 buf.emit_byte(base);
-                buf.emit_dword(im);
+                buf.emit_dword(#imm as i32 as u32);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
@@ -65,9 +61,8 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 let d = (#dst as u8) % 8;
                 let mod_rm = (0b00 << 6) | (d << 3) | (0b100 << 0);
 
-                let addr = addr.addr;
-                    buf.emit_raw(&[base, 0x8b, mod_rm, 0x25]);
-                    buf.emit_dword(#addr);
+                buf.emit_raw(&[base, 0x8b, mod_rm, 0x25]);
+                buf.emit_dword(#addr);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
@@ -82,6 +77,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 let base = (0b1001 << 3)
                     | (u8::from(#dst >= #r8) << 2)
                     | (u8::from(#src >= #r8) << 0);
+
                 let mode = u8::from(#disp != 0) << 1;
                 let s = (#src as u8) % 8;
                 let d = (#dst as u8) % 8;
@@ -89,14 +85,10 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
 
                 buf.emit_raw(&[base, 0x8b, mod_rm]);
                 if #src == #rsp {
-                    ts.extend(quote! {
-                        buf.emit_byte(0x24);
-                    });
+                    buf.emit_byte(0x24);
                 }
                 if mode != 0 {
-                    ts.extend(quote! {
-                        buf.emit_dword(#disp);
-                    })
+                    buf.emit_dword(#disp);
                 }
             }
         }
