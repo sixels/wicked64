@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use proc_macro2::Ident;
+use quote::ToTokens;
 use syn::parse::Parse;
 
 #[repr(u8)]
@@ -57,6 +58,12 @@ impl Parse for Register {
             .as_str()
             .try_into()
             .map_err(|_| syn::Error::new(reg.span(), "Invalid register name"))
+    }
+}
+
+impl ToTokens for Register {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        (*self as u8).to_tokens(tokens)
     }
 }
 
