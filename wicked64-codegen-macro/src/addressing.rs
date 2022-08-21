@@ -1,3 +1,5 @@
+use std::{cmp::Ordering, fmt::Display};
+
 use proc_macro2::Punct;
 use syn::{
     bracketed,
@@ -80,5 +82,42 @@ pub struct AddrImmediate(pub u64);
 impl Parse for AddrImmediate {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Ok(Self(input.parse::<LitInt>()?.base10_parse()?))
+    }
+}
+
+impl Display for AddressingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AddressingMode::Immediate(imm) => imm.fmt(f),
+            AddressingMode::Register(reg) => reg.fmt(f),
+            AddressingMode::Direct(dir) => dir.fmt(f),
+            AddressingMode::Indirect(ind) => ind.fmt(f),
+        }
+    }
+}
+
+impl Display for AddrImmediate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let imm = self.0;
+        write!(f, "0x{imm:08x}")
+    }
+}
+
+impl Display for AddrDirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let addr = self.addr;
+        write!(f, "[0x{addr:04x}]")
+    }
+}
+
+impl Display for AddrIndirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { reg, disp, .. } = self;
+
+        match disp.cmp(&0) {
+            Ordering::Greater => write!(f, "[{reg} + 0x{disp:04x}]"),
+            Ordering::Less => write!(f, "[{reg} - 0x{disp:04x}]"),
+            Ordering::Equal => write!(f, "[{reg}]"),
+        }
     }
 }
