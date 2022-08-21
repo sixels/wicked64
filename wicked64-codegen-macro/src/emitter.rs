@@ -17,7 +17,7 @@ pub fn emit(instruction: Instruction) -> TokenStream {
 fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
     match (dst, src) {
         (AddressingMode::Register(dst), AddressingMode::Register(src)) => {
-            debug_assert!(dst != Register::Rsp);
+            // debug_assert!(dst != Register::Rsp);
             let base = (0b1001 << 3)
                 | (u8::from(src >= Register::R8) << 2)
                 | (u8::from(dst >= Register::R8) << 0);
@@ -26,7 +26,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             let d = (dst as u8) % 8;
             let mod_rm = (0b11 << 6) | (s << 3) | (d << 0);
             quote! {
-                buf.emit_raw!(&[#base, 0x89, #mod_rm])
+                buf.emit_raw(&[#base, 0x89, #mod_rm]);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Immediate(im)) => {
@@ -49,7 +49,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             ts
         }
         (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
-            debug_assert!(dst != Register::Rsp);
+            // debug_assert!(dst != Register::Rsp);
             let base = (0b1001 << 3) | (u8::from(dst >= Register::R8) << 2);
 
             let d = (dst as u8) % 8;
@@ -62,7 +62,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
-            debug_assert!(dst != Register::Rsp);
+            // debug_assert!(dst != Register::Rsp);
             
             let AddrIndirect { reg: src, disp, .. } = src;
             let base = (0b1001 << 3)
@@ -79,12 +79,12 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             };
             if src == Register::Rsp {
                 ts.extend(quote! {
-                    buf.write_byte(0x24);
+                    buf.emit_byte(0x24);
                 });
             }
             if mode != 0 {
                 ts.extend(quote! {
-                    buf.write_dword(#disp);
+                    buf.emit_dword(#disp);
                 })
             }
             ts
