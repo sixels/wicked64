@@ -36,10 +36,34 @@ impl Parse for AddressingMode {
     }
 }
 
+#[repr(transparent)]
+pub struct AddrImmediate(pub u64);
+
+pub struct AddrDirect {
+    _bracket: Bracket,
+    pub addr: i32,
+}
+
 pub struct AddrIndirect {
     _bracket: Bracket,
     pub reg: Register,
     pub disp: i32,
+}
+
+impl Parse for AddrImmediate {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self(input.parse::<LitInt>()?.base10_parse()?))
+    }
+}
+
+impl Parse for AddrDirect {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            _bracket: bracketed!(content in input),
+            addr: content.parse::<LitInt>()?.base10_parse()?,
+        })
+    }
 }
 
 impl Parse for AddrIndirect {
@@ -58,30 +82,6 @@ impl Parse for AddrIndirect {
                 }
             },
         })
-    }
-}
-
-pub struct AddrDirect {
-    _bracket: Bracket,
-    pub addr: i32,
-}
-
-impl Parse for AddrDirect {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let content;
-        Ok(Self {
-            _bracket: bracketed!(content in input),
-            addr: content.parse::<LitInt>()?.base10_parse()?,
-        })
-    }
-}
-
-#[repr(transparent)]
-pub struct AddrImmediate(pub u64);
-
-impl Parse for AddrImmediate {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self(input.parse::<LitInt>()?.base10_parse()?))
     }
 }
 
