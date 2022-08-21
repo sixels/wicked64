@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use syn::{
     parse::{Parse, ParseStream},
     Ident, Token,
@@ -46,9 +48,42 @@ impl Parse for Instruction {
             "sub" => parse!(2, Self::Sub),
             "xor" => parse!(2, Self::Xor),
             "ret" => Self::Ret,
-            _ => return Err(syn::Error::new(inst.span(), "Unimplemented instruction")),
+            _ => {
+                return Err(syn::Error::new(
+                    inst.span(),
+                    format!("Unimplemented instruction: {}", inst),
+                ))
+            }
         };
         input.parse::<Token![;]>()?;
         Ok(inst)
+    }
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        macro_rules! w {
+            ($inst:literal) => {
+                write!(f, "{} {}", $inst)
+            };
+            ($inst:literal, $a:expr) => {
+                write!(f, "{} {}", $inst, $a)
+            };
+            ($inst:literal, $a:expr, $b:expr) => {
+                write!(f, "{} {}, {}", $inst, $a, $b)
+            };
+        }
+
+        match self {
+            Instruction::Mov(dst, src) => w!("mov", dst, src),
+            Instruction::Movabs(dst, src) => w!("movabs", dst, src),
+            Instruction::Push(reg) => w!("push", reg),
+            Instruction::Pop(reg) => w!("pop", reg),
+            Instruction::Add(a, b) => w!("add", a, b),
+            Instruction::Or(a, b) => w!("or", a, b),
+            Instruction::Sub(a, b) => w!("sub", a, b),
+            Instruction::Xor(a, b) => w!("xor", a, b),
+            Instruction::Ret => w!("ret"),
+        }
     }
 }
