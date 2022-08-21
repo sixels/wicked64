@@ -338,6 +338,14 @@ name = "wicked64"
 version = "0.1.0"
 
 [[package]]
+name = "wicked64-codegen"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "wicked64-codegen-macro",
+]
+
+[[package]]
 name = "wicked64-codegen-macro"
 version = "0.1.0"
 dependencies = [
