@@ -61,7 +61,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 let mod_rm = (0b00 << 6) | (d << 3) | (0b100 << 0);
 
                 buf.emit_raw(&[base, 0x8b, mod_rm, 0x25]);
-                buf.emit_dword(#addr);
+                buf.emit_dword(#addr as i32 as u32);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
