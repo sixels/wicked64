@@ -1,5 +1,5 @@
 [package]
-name = "wicked64-codegen-types"
+name = "w64-codegen-types"
 version = "0.1.0"
 edition = "2021"
 

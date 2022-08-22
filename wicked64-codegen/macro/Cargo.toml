@@ -1,6 +1,6 @@
 
 [package]
-name = "wicked64-codegen-macro"
+name = "w64-codegen-macro"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,6 +12,4 @@ proc-macro2 = "1.0.43"
 quote = "1.0.20"
 syn = { version = "1.0.98", features = ["full"] }
 
-wicked64-codegen-types = { path = "../wicked64-codegen-types", features = [
-    "macro",
-] }
+w64-codegen-types = { path = "../types", features = ["macro"] }

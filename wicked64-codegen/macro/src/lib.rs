@@ -35,7 +35,7 @@ pub fn emit(tokens: TokenStream) -> TokenStream {
     } = parse_macro_input!(tokens as Emit);
 
     let mut src = quote! {
-        use wicked64_codegen::prelude::*;
+        use w64_codegen::prelude::*;
         let buf = &mut #buffer;
     };
     let gen = instructions.into_iter().map(emitter::emit);

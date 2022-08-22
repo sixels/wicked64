@@ -8,7 +8,7 @@ use syn::{
     token::Bracket,
     Ident, LitInt, Token,
 };
-use wicked64_codegen_types::register::Register;
+use w64_codegen_types::register::Register;
 
 pub enum AddressingMode {
     Immediate(AddrImmediate),
@@ -56,7 +56,7 @@ pub enum AddrImmediate {
 /// Register addressing mode
 pub enum AddrRegister {
     /// Matches a register inside a variable (e.g: `let reg = Register::Rax; push %reg`).
-    /// The variable must be a valid wicked64-codegen::Register.
+    /// The variable must be of type `w64_codegen::register::Register`.
     Var(Ident),
     /// Matches a register literal (e.g: `push rax`).
     /// The literal must be a valid register name.

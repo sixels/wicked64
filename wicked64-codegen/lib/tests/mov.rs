@@ -1,6 +1,6 @@
-use wicked64_codegen::emit;
-use wicked64_codegen::register::Register;
-use wicked64_codegen::Emitter;
+use w64_codegen::emit;
+use w64_codegen::register::Register;
+use w64_codegen::Emitter;
 
 #[test]
 fn mov_reg_reg() {

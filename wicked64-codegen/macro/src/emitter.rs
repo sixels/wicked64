@@ -43,7 +43,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
         }
         (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
             quote! {
-                let base = (0b1001 << 3) | (u8::from(#dst >= wicked64_codegen_types::register::Register::R8) << 2);
+                let base = (0b1001 << 3) | (u8::from(#dst >= Register::R8) << 2);
 
                 let d = (#dst as u8) % 8;
                 let mod_rm = (0b00 << 6) | (d << 3) | (0b100 << 0);
@@ -66,7 +66,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 let mod_rm = (mode << 6) | (d << 3) | (s << 0);
 
                 buf.emit_raw(&[base, 0x8b, mod_rm]);
-                if #src == wicked64_codegen_types::register::Register::Rsp {
+                if #src == Register::Rsp {
                     buf.emit_byte(0x24);
                 }
                 if mode != 0 {

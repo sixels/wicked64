@@ -4,7 +4,7 @@ use syn::{
     parse::{Parse, ParseStream},
     Ident, Token,
 };
-use wicked64_codegen_types::register::Register;
+use w64_codegen_types::register::Register;
 
 use crate::addressing::{AddrImmediate, AddressingMode};
 
