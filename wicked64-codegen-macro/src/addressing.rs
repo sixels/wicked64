@@ -27,10 +27,17 @@ impl Parse for AddressingMode {
         } else if lookahead.peek(Ident) || lookahead.peek(Token![%]) {
             input.parse().map(Self::Register)
         } else if lookahead.peek(Bracket) {
-            input
-                .parse()
-                .map(Self::Indirect)
-                .or_else(|_| input.parse().map(Self::Direct))
+            input.step(|cursor| {
+                if let Some((tt, next)) = cursor.token_tree() {
+                    let ts = tt.into_token_stream();
+                    syn::parse2(ts.clone())
+                        .map(Self::Direct)
+                        .or_else(|_| syn::parse2(ts).map(Self::Indirect))
+                        .map(|addressing| (addressing, next))
+                } else {
+                    Err(cursor.error("Invalid addressing mode"))
+                }
+            })
         } else {
             Err(lookahead.error())
         }
@@ -59,8 +66,7 @@ pub enum AddrRegister {
 
 /// Direct addressing mode
 pub struct AddrDirect {
-    _bracket: Bracket,
-    pub addr: i32,
+    pub addr: AddrImmediate,
 }
 
 /// Indirect addressing mode
@@ -106,9 +112,9 @@ impl Parse for AddrRegister {
 impl Parse for AddrDirect {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let content;
+        bracketed!(content in input);
         Ok(Self {
-            _bracket: bracketed!(content in input),
-            addr: content.parse::<LitInt>()?.base10_parse()?,
+            addr: content.parse::<AddrImmediate>()?,
         })
     }
 }
@@ -165,7 +171,7 @@ impl Display for AddrImmediate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Var(var) => var.fmt(f),
-            Self::Lit(imm) => imm.fmt(f),
+            Self::Lit(imm) => write!(f, "0x{imm:08x}"),
         }
     }
 }
@@ -181,8 +187,8 @@ impl Display for AddrRegister {
 
 impl Display for AddrDirect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let addr = self.addr;
-        write!(f, "[0x{addr:04x}]")
+        let addr = &self.addr;
+        write!(f, "[{addr}]")
     }
 }
 
