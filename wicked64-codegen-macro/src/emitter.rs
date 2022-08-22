@@ -4,7 +4,6 @@ use quote::quote;
 use crate::{
     addressing::{AddrIndirect, AddressingMode},
     instruction::Instruction,
-    register::Register,
 };
 
 pub fn emit(instruction: Instruction) -> TokenStream {
@@ -17,12 +16,10 @@ pub fn emit(instruction: Instruction) -> TokenStream {
 fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
     match (dst, src) {
         (AddressingMode::Register(dst), AddressingMode::Register(src)) => {
-            // debug_assert!(dst != Register::Rsp);
-            let r8 = Register::R8;
             quote! {
                 let base = (0b1001 << 3)
-                    | (u8::from(#src as u8 >= #r8) << 2)
-                    | (u8::from(#dst as u8 >= #r8) << 0);
+                    | (u8::from(#src >= Register::R8) << 2)
+                    | (u8::from(#dst >= Register::R8) << 0);
 
                 let s = (#src as u8) % 8;
                 let d = (#dst as u8) % 8;
@@ -32,16 +29,12 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Immediate(imm)) => {
-            // debug_assert!(dst != Register::Rsp);
-
-            let r8 = Register::R8;
-
             quote! {
                 let dst_n = (#dst as u8) % 8;
 
                 let base = dst_n + 0xb8;
 
-                if #dst as u8 >= #r8 {
+                if #dst >= Register::R8 {
                     buf.emit_byte(0x41);
                 }
                 buf.emit_byte(base);
@@ -49,13 +42,8 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
-            // debug_assert!(dst != Register::Rsp);
-
-            let addr = addr.addr;
-            let r8 = Register::R8;
-
             quote! {
-                let base = (0b1001 << 3) | (u8::from(#dst >= #r8) << 2);
+                let base = (0b1001 << 3) | (u8::from(#dst >= wicked64_codegen_types::register::Register::R8) << 2);
 
                 let d = (#dst as u8) % 8;
                 let mod_rm = (0b00 << 6) | (d << 3) | (0b100 << 0);
@@ -65,17 +53,12 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
-            // debug_assert!(dst != Register::Rsp);
-
             let AddrIndirect { reg: src, disp, .. } = src;
-
-            let r8 = Register::R8;
-            let rsp = Register::Rsp;
 
             quote! {
                 let base = (0b1001 << 3)
-                    | (u8::from(#dst >= #r8) << 2)
-                    | (u8::from(#src >= #r8) << 0);
+                    | (u8::from(#dst >= Register::R8) << 2)
+                    | (u8::from(#src >= Register::R8) << 0);
 
                 let mode = u8::from(#disp != 0) << 1;
                 let s = (#src as u8) % 8;
@@ -83,7 +66,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 let mod_rm = (mode << 6) | (d << 3) | (s << 0);
 
                 buf.emit_raw(&[base, 0x8b, mod_rm]);
-                if #src == #rsp {
+                if #src == wicked64_codegen_types::register::Register::Rsp {
                     buf.emit_byte(0x24);
                 }
                 if mode != 0 {

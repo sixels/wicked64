@@ -1,12 +1,13 @@
+use wicked64_codegen::emit;
+use wicked64_codegen::register::Register;
 use wicked64_codegen::Emitter;
-use wicked64_codegen_macro::emit;
 
 #[test]
 fn mov_reg_reg() {
     let mut emitter = Emitter::new();
 
-    let rax = 0;
-    let r9 = 9;
+    let rax = Register::Rax;
+    let r9 = Register::R9;
 
     emit!(emitter,
         mov rcx, r8;
@@ -37,7 +38,7 @@ fn mov_reg_immediate() {
     let mut emitter = Emitter::new();
 
     let val = 0x3412;
-    let r11 = 11;
+    let r11 = Register::R11;
 
     emit!(emitter,
         mov rcx, 0x3412;
@@ -71,7 +72,7 @@ fn mov_reg_immediate() {
 fn mov_reg_direct() {
     let mut emitter = Emitter::new();
 
-    let rcx = 1;
+    let rcx = Register::Rcx;
     let val = 0x78563412;
 
     emit!(emitter,

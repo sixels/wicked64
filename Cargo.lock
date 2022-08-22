@@ -343,10 +343,21 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "wicked64-codegen-macro",
+ "wicked64-codegen-types",
 ]
 
 [[package]]
 name = "wicked64-codegen-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "wicked64-codegen-types",
+]
+
+[[package]]
+name = "wicked64-codegen-types"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",

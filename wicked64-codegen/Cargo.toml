@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 byteorder = "1.4.3"
 wicked64-codegen-macro = { path = "../wicked64-codegen-macro" }
+wicked64-codegen-types = { path = "../wicked64-codegen-types" }

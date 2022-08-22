@@ -8,8 +8,7 @@ use syn::{
     token::Bracket,
     Ident, LitInt, Token,
 };
-
-use crate::register::Register;
+use wicked64_codegen_types::register::Register;
 
 pub enum AddressingMode {
     Immediate(AddrImmediate),
@@ -56,8 +55,8 @@ pub enum AddrImmediate {
 
 /// Register addressing mode
 pub enum AddrRegister {
-    /// Matches a register inside a variable (e.g: `let reg = 0; push %reg`).
-    /// The variable must be a valid integer.
+    /// Matches a register inside a variable (e.g: `let reg = Register::Rax; push %reg`).
+    /// The variable must be a valid wicked64-codegen::Register.
     Var(Ident),
     /// Matches a register literal (e.g: `push rax`).
     /// The literal must be a valid register name.
@@ -71,7 +70,6 @@ pub struct AddrDirect {
 
 /// Indirect addressing mode
 pub struct AddrIndirect {
-    _bracket: Bracket,
     pub reg: Register,
     pub disp: i32,
 }
@@ -123,8 +121,8 @@ impl Parse for AddrIndirect {
     /// Match `[register + displacement] || [registers]`.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let content;
+        bracketed!(content in input);
         Ok(Self {
-            _bracket: bracketed!(content in input),
             reg: content.parse()?,
             disp: {
                 if content.peek(Token![+]) || content.peek(Token![-]) {
@@ -153,6 +151,12 @@ impl ToTokens for AddrImmediate {
             Self::Var(var) => var.to_tokens(tokens),
             Self::Lit(imm) => imm.to_tokens(tokens),
         }
+    }
+}
+
+impl ToTokens for AddrDirect {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.addr.to_tokens(tokens)
     }
 }
 
