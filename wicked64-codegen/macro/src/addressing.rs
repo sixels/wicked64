@@ -70,7 +70,7 @@ pub struct AddrDirect {
 
 /// Indirect addressing mode
 pub struct AddrIndirect {
-    pub reg: Register,
+    pub reg: AddrRegister,
     pub disp: i32,
 }
 
@@ -118,7 +118,6 @@ impl Parse for AddrDirect {
 }
 
 impl Parse for AddrIndirect {
-    /// Match `[register + displacement] || [registers]`.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let content;
         bracketed!(content in input);

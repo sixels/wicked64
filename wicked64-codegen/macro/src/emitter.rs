@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, TokenStreamExt};
 
 use crate::{
     addressing::{AddrIndirect, AddressingMode},
@@ -53,7 +53,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
-            let AddrIndirect { reg: src, disp, .. } = src;
+            let AddrIndirect { reg: src, disp } = src;
 
             quote! {
                 let base = (0b1001 << 3)
@@ -70,7 +70,7 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                     buf.emit_byte(0x24);
                 }
                 if mode != 0 {
-                    buf.emit_dword(#disp);
+                    buf.emit_dword(#disp as i32 as u32);
                 }
             }
         }

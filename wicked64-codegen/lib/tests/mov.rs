@@ -102,3 +102,36 @@ fn mov_reg_direct() {
         ]
     );
 }
+
+#[test]
+fn mod_reg_indirect() {
+    let mut emitter = Emitter::new();
+
+    let r9 = Register::R9;
+    let rax = Register::Rax;
+
+    emit!(emitter,
+        mov rcx, [r8];
+        mov r9, [rax];
+        mov rcx, [rbx];
+        mov r9, [r11];
+        mov rax, [r9];
+        mov %r9, [rax];
+        mov r9, [%rax];
+        mov %r9, [%rax];
+    );
+
+    assert_eq!(
+        emitter.as_slice(),
+        &[
+            0x49, 0x8b, 0x08, // mov rcx, [r8]
+            0x4c, 0x8b, 0x08, // mov r9, [rax]
+            0x48, 0x8b, 0x0b, // mov rcx, [rbx]
+            0x4d, 0x8b, 0x0b, // mov r9, [r11]
+            0x49, 0x8b, 0x01, // mov rax, [r9]
+            0x4c, 0x8b, 0x08, // mov r9, [rax]
+            0x4c, 0x8b, 0x08, // mov r9, [rax]
+            0x4c, 0x8b, 0x08, // mov r9, [rax]
+        ]
+    )
+}
