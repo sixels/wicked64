@@ -6,13 +6,13 @@ use syn::{
 };
 use w64_codegen_types::register::Register;
 
-use crate::addressing::{AddrImmediate, AddressingMode};
+use crate::addressing::{AddrImmediate, AddrRegister, AddressingMode};
 
 pub enum Instruction {
     Mov(AddressingMode, AddressingMode),
     Movabs(AddressingMode, AddrImmediate),
-    Push(Register),
-    Pop(Register),
+    Push(AddrRegister),
+    Pop(AddrRegister),
     Add(Register, AddressingMode),
     Or(Register, AddressingMode),
     Sub(Register, AddressingMode),

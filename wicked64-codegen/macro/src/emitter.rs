@@ -2,19 +2,28 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::{
-    addressing::{AddrImmediate, AddrIndirect, AddressingMode},
+    addressing::{AddrImmediate, AddrIndirect, AddrRegister, AddressingMode},
     instruction::Instruction,
 };
 
 pub fn emit(instruction: Instruction) -> TokenStream {
     match instruction {
         Instruction::Mov(dst, src) => emit_mov(dst, src),
+        Instruction::Movabs(dst, src) => emit_movabs(dst, src),
+        Instruction::Push(reg) => emit_push(reg),
+        Instruction::Pop(reg) => emit_pop(reg),
+        // Instruction::Add(_, _) => todo!(),
+        // Instruction::Or(_, _) => todo!(),
+        // Instruction::Sub(_, _) => todo!(),
+        // Instruction::Xor(_, _) => todo!(),
+        // Instruction::Ret => todo!(),
         _ => todo!("Instruction not implemented yet"),
     }
 }
 
 fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
     match (dst, src) {
+        (AddressingMode::Immediate(_), _) => panic!("Invalid mov destination"),
         (AddressingMode::Register(dst), AddressingMode::Register(src)) => {
             quote! {
                 let base = (0b1001 << 3)
@@ -80,6 +89,42 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                 }
             }
         }
-        _ => unimplemented!(),
+        (a, b) => todo!("mov {a}, {b}"),
+    }
+}
+
+fn emit_movabs(dst: AddressingMode, src: AddrImmediate) -> TokenStream {
+    match dst {
+        AddressingMode::Immediate(_) => panic!("Invalid movabs destination"),
+        AddressingMode::Register(dst) => {
+            quote! {
+                let d = #dst as u8 % 8;
+                let base = if #dst >= X64Gpr::R8 { 0x49 } else { 0x48 };
+
+                buf.emit_raw(&[base, 0xb8 + d]);
+                buf.emit_qword(#src);
+            }
+        }
+        a => todo!("movabs {a}, {src}"),
+    }
+}
+
+fn emit_push(reg: AddrRegister) -> TokenStream {
+    quote! {
+        let r = #reg as u8 % 8;
+        if #reg >= Register::R8 {
+            buf.emit_byte(0x41);
+        }
+        buf.emit_byte(0x50 + r);
+    }
+}
+
+fn emit_pop(reg: AddrRegister) -> TokenStream {
+    quote! {
+        let r = #reg as u8 % 8;
+        if #reg >= Register::R8 {
+            buf.emit_byte(0x41);
+        }
+        buf.emit_byte(0x58 + r);
     }
 }

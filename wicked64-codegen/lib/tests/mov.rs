@@ -183,3 +183,8 @@ fn mod_reg_indirect_displacement() {
         ]
     );
 }
+
+#[test]
+fn movabs() {
+    todo!()
+}
