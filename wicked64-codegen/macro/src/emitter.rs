@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
-use quote::{quote, TokenStreamExt};
+use quote::quote;
 
 use crate::{
-    addressing::{AddrIndirect, AddressingMode},
+    addressing::{AddrImmediate, AddrIndirect, AddressingMode},
     instruction::Instruction,
 };
 
@@ -55,6 +55,11 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
         (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
             let AddrIndirect { reg: src, disp } = src;
 
+            let (neg, disp) = match disp {
+                Some((neg, disp)) => (neg, disp),
+                None => (false, AddrImmediate::Lit(0)),
+            };
+
             quote! {
                 let base = (0b1001 << 3)
                     | (u8::from(#dst >= Register::R8) << 2)
@@ -70,7 +75,8 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                     buf.emit_byte(0x24);
                 }
                 if mode != 0 {
-                    buf.emit_dword(#disp as i32 as u32);
+                    let disp = #disp as i32;
+                    buf.emit_dword(if #neg { -disp } else { disp } as u32 );
                 }
             }
         }

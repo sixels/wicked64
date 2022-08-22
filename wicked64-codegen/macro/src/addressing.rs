@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Display};
+use std::fmt::Display;
 
 use proc_macro2::Punct;
 use quote::ToTokens;
@@ -71,7 +71,7 @@ pub struct AddrDirect {
 /// Indirect addressing mode
 pub struct AddrIndirect {
     pub reg: AddrRegister,
-    pub disp: i32,
+    pub disp: Option<(bool, AddrImmediate)>,
 }
 
 impl Parse for AddrImmediate {
@@ -121,17 +121,15 @@ impl Parse for AddrIndirect {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let content;
         bracketed!(content in input);
-        Ok(Self {
-            reg: content.parse()?,
-            disp: {
-                if content.peek(Token![+]) || content.peek(Token![-]) {
-                    let sign = i32::from(content.parse::<Punct>()?.as_char() == '-') * -1;
-                    content.parse::<LitInt>()?.base10_parse::<i32>()? * sign
-                } else {
-                    0
-                }
-            },
-        })
+
+        let reg = content.parse()?;
+        let disp = if content.peek(Token![+]) || content.peek(Token![-]) {
+            Some((content.parse::<Punct>()?.as_char() == '-', content.parse()?))
+        } else {
+            None
+        };
+
+        Ok(Self { reg, disp })
     }
 }
 
@@ -197,12 +195,11 @@ impl Display for AddrDirect {
 
 impl Display for AddrIndirect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { reg, disp, .. } = self;
+        let Self { reg, disp } = self;
 
-        match disp.cmp(&0) {
-            Ordering::Greater => write!(f, "[{reg} + 0x{disp:04x}]"),
-            Ordering::Less => write!(f, "[{reg} - 0x{disp:04x}]"),
-            Ordering::Equal => write!(f, "[{reg}]"),
+        match disp {
+            Some((neg, disp)) => write!(f, "[{reg} {} {disp}]", if *neg { '-' } else { '+' }),
+            None => write!(f, "[{reg}]"),
         }
     }
 }
