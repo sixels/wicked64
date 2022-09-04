@@ -4,7 +4,7 @@ use w64_codegen::Emitter;
 
 #[test]
 fn mov_reg_reg() {
-    let mut emitter = Emitter::new();
+    let mut emitter = Emitter::default();
 
     let rax = Register::Rax;
     let r9 = Register::R9;
@@ -35,7 +35,7 @@ fn mov_reg_reg() {
 
 #[test]
 fn mov_reg_immediate() {
-    let mut emitter = Emitter::new();
+    let mut emitter = Emitter::default();
 
     let val = 0x3412;
     let r11 = Register::R11;
@@ -70,7 +70,7 @@ fn mov_reg_immediate() {
 
 #[test]
 fn mov_reg_direct() {
-    let mut emitter = Emitter::new();
+    let mut emitter = Emitter::default();
 
     let rcx = Register::Rcx;
     let val = 0x78563412;
@@ -105,7 +105,7 @@ fn mov_reg_direct() {
 
 #[test]
 fn mod_reg_indirect() {
-    let mut emitter = Emitter::new();
+    let mut emitter = Emitter::default();
 
     let r9 = Register::R9;
     let rax = Register::Rax;
@@ -138,7 +138,7 @@ fn mod_reg_indirect() {
 
 #[test]
 fn mod_reg_indirect_displacement() {
-    let mut emitter = Emitter::new();
+    let mut emitter = Emitter::default();
 
     let rcx = Register::Rcx;
     let rbx = Register::Rbx;
@@ -185,6 +185,7 @@ fn mod_reg_indirect_displacement() {
 }
 
 #[test]
+#[ignore = "TODO: Write some tests"]
 fn movabs() {
     todo!()
 }
