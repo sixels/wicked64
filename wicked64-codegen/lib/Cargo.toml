@@ -9,3 +9,4 @@ edition = "2021"
 byteorder = "1.4.3"
 w64-codegen-macro = { path = "../macro" }
 w64-codegen-types = { path = "../types" }
+region = "3.0.0"
