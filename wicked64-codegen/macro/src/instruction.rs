@@ -6,7 +6,7 @@ use syn::{
 };
 use w64_codegen_types::register::Register;
 
-use crate::addressing::{AddrImmediate, AddrRegister, AddressingMode};
+use crate::addressing::{AddrImmediate, AddrRegister, AddressingMode, CallArgs};
 
 pub enum Instruction {
     Mov(AddressingMode, AddressingMode),
@@ -17,6 +17,8 @@ pub enum Instruction {
     Or(Register, AddressingMode),
     Sub(Register, AddressingMode),
     Xor(Register, AddressingMode),
+    Call(AddressingMode),
+    CallFn(Ident, CallArgs),
     Ret,
 }
 
@@ -50,6 +52,8 @@ impl Parse for Instruction {
             "or" => parse!(2, Self::Or),
             "sub" => parse!(2, Self::Sub),
             "xor" => parse!(2, Self::Xor),
+            "call" => parse!(1, Self::Call),
+            "call_fn" => parse!(2d, Self::CallFn),
             "ret" => Self::Ret,
             _ => {
                 return Err(syn::Error::new(
@@ -86,6 +90,8 @@ impl Display for Instruction {
             Instruction::Or(a, b) => w!("or", a, b),
             Instruction::Sub(a, b) => w!("sub", a, b),
             Instruction::Xor(a, b) => w!("xor", a, b),
+            Instruction::CallFn(a, b) => write!(f, "call_fn {a}({b})"),
+            Instruction::Call(a) => w!("call", a),
             Instruction::Ret => w!("ret"),
         }
     }
