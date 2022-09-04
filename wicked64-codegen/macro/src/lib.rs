@@ -21,20 +21,17 @@ impl Parse for Instructions {
 }
 struct Emit {
     buffer: Ident,
-    instructions: Vec<Instruction>,
+    instructions: Instructions,
 }
 
 impl Parse for Emit {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let buffer = input.parse()?;
-        input.parse::<Token![,]>()?;
-        let mut instructions = Vec::new();
-        while !input.is_empty() {
-            instructions.push(input.parse()?);
-        }
+        input.parse::<Comma>()?;
+
         Ok(Self {
             buffer,
-            instructions,
+            instructions: input.parse()?,
         })
     }
 }
