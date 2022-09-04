@@ -33,6 +33,11 @@ impl Parse for Instruction {
                 let b = input.parse()?;
                 $variant(a, b)
             }};
+            (2d, $variant:expr) => {{
+                let a = input.parse()?;
+                let b = input.parse()?;
+                $variant(a, b)
+            }};
         }
 
         let inst: Ident = input.parse()?;
