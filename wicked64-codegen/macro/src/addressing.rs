@@ -1,20 +1,28 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
-use proc_macro2::Punct;
-use quote::ToTokens;
+use proc_macro2::{Punct, Spacing};
+use quote::{ToTokens, TokenStreamExt};
 use syn::{
-    bracketed,
+    bracketed, parenthesized,
     parse::{Parse, ParseStream},
-    token::Bracket,
-    Ident, LitInt, Token,
+    token::{Bracket, Comma},
+    Expr, Ident, LitInt, Token,
 };
 use w64_codegen_types::register::Register;
 
+#[derive(Clone)]
 pub enum AddressingMode {
     Immediate(AddrImmediate),
     Register(AddrRegister),
     Direct(AddrDirect),
     Indirect(AddrIndirect),
+}
+
+pub struct CallArgs(pub Vec<Argument>);
+pub enum Argument {
+    Register(AddrRegister),
+    Immediate(AddrImmediate),
+    Ref(Expr),
 }
 
 impl Parse for AddressingMode {
@@ -43,7 +51,33 @@ impl Parse for AddressingMode {
     }
 }
 
+impl Parse for CallArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        parenthesized!(content in input);
+
+        let mut args = Vec::new();
+        while !content.is_empty() {
+            let lookahead = content.lookahead1();
+            if lookahead.peek(Token![ref]) {
+                content.parse::<Token![ref]>()?;
+                args.push(Argument::Ref(content.parse()?));
+            } else if lookahead.peek(Token![$]) || lookahead.peek(LitInt) {
+                args.push(Argument::Immediate(content.parse()?));
+            } else if lookahead.peek(Token![%]) || lookahead.peek(Ident) {
+                args.push(Argument::Register(content.parse()?));
+            }
+
+            if !content.is_empty() {
+                content.parse::<Comma>()?;
+            }
+        }
+        Ok(CallArgs(args))
+    }
+}
+
 /// Immediate addressing mode
+#[derive(Clone)]
 pub enum AddrImmediate {
     /// Matches an immediate inside a variable (e.g `let val = 0x1234; mov rax, $val`).
     /// The variable's type must be u64
@@ -54,6 +88,7 @@ pub enum AddrImmediate {
 }
 
 /// Register addressing mode
+#[derive(Clone)]
 pub enum AddrRegister {
     /// Matches a register inside a variable (e.g: `let reg = Register::Rax; push %reg`).
     /// The variable must be of type `w64_codegen::register::Register`.
@@ -64,11 +99,13 @@ pub enum AddrRegister {
 }
 
 /// Direct addressing mode
+#[derive(Clone)]
 pub struct AddrDirect {
     pub addr: AddrImmediate,
 }
 
 /// Indirect addressing mode
+#[derive(Clone)]
 pub struct AddrIndirect {
     pub reg: AddrRegister,
     pub disp: Option<(bool, AddrImmediate)>,
@@ -133,6 +170,19 @@ impl Parse for AddrIndirect {
     }
 }
 
+impl ToTokens for CallArgs {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        tokens.append_separated(
+            self.0.iter().map(|a| match a {
+                Argument::Register(reg) => quote::quote!(#reg as _),
+                Argument::Immediate(imm) => quote::quote!(#imm as _),
+                Argument::Ref(ident) => quote::quote!(#ident as _),
+            }),
+            proc_macro2::Punct::new(',', Spacing::Joint),
+        )
+    }
+}
+
 impl ToTokens for AddrRegister {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
@@ -165,6 +215,19 @@ impl Display for AddressingMode {
             AddressingMode::Direct(dir) => dir.fmt(f),
             AddressingMode::Indirect(ind) => ind.fmt(f),
         }
+    }
+}
+
+impl Display for CallArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(")?;
+        for arg in self.0.iter().take(self.0.len() - 1) {
+            write!(f, "{arg}, ")?;
+        }
+        if let Some(arg) = self.0.iter().last() {
+            write!(f, "{arg}")?;
+        }
+        write!(f, ")")
     }
 }
 
@@ -201,5 +264,23 @@ impl Display for AddrIndirect {
             Some((neg, disp)) => write!(f, "[{reg} {} {disp}]", if *neg { '-' } else { '+' }),
             None => write!(f, "[{reg}]"),
         }
+    }
+}
+
+impl Display for Argument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Immediate(imm) => imm.fmt(f),
+            Self::Register(reg) => reg.fmt(f),
+            Self::Ref(_) => write!(f, "<reference>"),
+        }
+    }
+}
+
+impl Deref for CallArgs {
+    type Target = Vec<Argument>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
