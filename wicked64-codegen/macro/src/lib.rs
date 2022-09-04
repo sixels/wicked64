@@ -1,6 +1,7 @@
 mod addressing;
 mod emitter;
 mod instruction;
+mod token;
 
 use instruction::Instruction;
 use proc_macro::TokenStream;
