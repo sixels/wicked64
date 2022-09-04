@@ -8,9 +8,9 @@ use crate::mmu::MemoryUnit;
 use crate::n64::State;
 
 use super::code::{CompiledBlock, RawBlock};
-use super::codegen::AddressingMode;
 use super::codegen::callable::Callable;
 use super::codegen::register::CALLEE_SAVED_REGISTERS;
+use super::codegen::AddressingMode;
 use super::codegen::{register::X64Gpr, Emitter};
 use super::register::{GuestRegister, Registers};
 
@@ -102,13 +102,12 @@ impl Jit {
         // Initialize the code generation
         let initial_pc = self.state.borrow().cpu.pc;
 
-        // Generate the code
-        let compiled_cycles = self.compile_block(cycles);
-        // TODO: Sinc guest registers with host registers
-        // **********************************************
-
         // Compile the code
         tracing::info!("Compiling the code");
+        let compiled_cycles = self.compile_block(cycles);
+        // TODO: Sync guest registers with host registers
+        // **********************************************
+
         let compiled = match self.code.compile(self.state.clone()) {
             Ok(compiled) => compiled,
             Err(error) => panic!("Could not compile the code: {error:?}"),
