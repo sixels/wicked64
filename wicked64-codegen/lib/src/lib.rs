@@ -8,3 +8,7 @@ pub use w64_codegen_types::register;
 pub mod prelude {
     pub use super::register::Register;
 }
+
+pub mod macro_internals {
+    pub use w64_codegen_macro::_emit_instructions;
+}
