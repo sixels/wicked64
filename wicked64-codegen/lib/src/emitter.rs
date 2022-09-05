@@ -84,7 +84,7 @@ impl ExecBuffer {
         Ok(Self { buf: buffer, ptr })
     }
 
-    pub fn execute(self) {
+    pub fn execute(&self) {
         unsafe {
             let f: unsafe extern "C" fn() = std::mem::transmute(self.ptr);
             f();

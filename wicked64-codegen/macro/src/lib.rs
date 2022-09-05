@@ -6,7 +6,8 @@ mod token;
 use instruction::Instruction;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, token::Comma, Ident};
+use syn::{parse::Parse, parse_macro_input, token::Comma};
+use token::Identfier;
 
 struct Instructions(Vec<Instruction>);
 
@@ -20,7 +21,7 @@ impl Parse for Instructions {
     }
 }
 struct Emit {
-    buffer: Ident,
+    buffer: Identfier,
     instructions: Instructions,
 }
 

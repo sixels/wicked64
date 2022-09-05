@@ -1,8 +1,9 @@
 use std::hash::Hash;
 
 use hashbrown::{HashMap, HashSet};
+use w64_codegen::register::Register;
 
-use super::codegen::register::X64Gpr;
+// use super::codegen::register::Register;
 
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Clone, Copy)]
 #[allow(dead_code)]
@@ -13,7 +14,7 @@ pub enum GuestRegister {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct HostRegister(X64Gpr, usize);
+struct HostRegister(Register, usize);
 
 impl Hash for HostRegister {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -26,15 +27,22 @@ type RegMap = HashMap<GuestRegister, HostRegister>;
 #[derive(Debug, Clone)]
 pub struct Registers {
     regs: RegMap,
-    free_regs: HashSet<X64Gpr>,
+    free_regs: HashSet<Register>,
     borrow_count: usize,
+}
+
+pub fn is_reserved(register: &Register) -> bool {
+    match register {
+        Register::Rsi | Register::Rdi | Register::Rsp | Register::Rbp => true,
+        _ => false,
+    }
 }
 
 impl Registers {
     pub fn new() -> Self {
         let free_regs = (0..16)
-            .map(|r| X64Gpr::try_from(r).unwrap())
-            .filter(|r| !r.is_reserved())
+            .map(|r| Register::try_from(r).unwrap())
+            .filter(|r| !is_reserved(r))
             .collect();
 
         Self {
@@ -44,16 +52,20 @@ impl Registers {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (GuestRegister, X64Gpr)> {
+    pub fn iter(&self) -> impl Iterator<Item = (GuestRegister, Register)> {
         self.regs
             .clone()
             .into_iter()
             .map(|(g, HostRegister(h, _))| (g, h))
     }
 
-    pub fn get_mapped_register<F>(&mut self, guest_reg: GuestRegister, mut drop_unused: F) -> X64Gpr
+    pub fn get_mapped_register<F>(
+        &mut self,
+        guest_reg: GuestRegister,
+        mut drop_unused: F,
+    ) -> Register
     where
-        F: FnMut(GuestRegister, X64Gpr) -> bool,
+        F: FnMut(GuestRegister, Register) -> bool,
     {
         if let Some(HostRegister(host_reg, borrowed)) = self.regs.get_mut(&guest_reg) {
             *borrowed = self.borrow_count;
@@ -68,20 +80,18 @@ impl Registers {
             let mut unused_regs = self.regs.iter().collect::<Vec<_>>();
             unused_regs.sort_by_key(|(_, HostRegister(_, n))| *n);
 
-            let find_unused = || {
-                for (&guest_reg, &HostRegister(host_reg, _)) in unused_regs.into_iter() {
-                    // We need to know if we can drop this register safely (We
-                    // don't want to drop tmp registers, as they are intended to
-                    // be manually dropped), so we need to ask before
-                    if drop_unused(guest_reg, host_reg) {
-                        self.free_regs.insert(host_reg);
-                        return Some(host_reg);
-                    }
+            let mut unused = None;
+            for (&guest_reg, &HostRegister(host_reg, _)) in unused_regs.into_iter() {
+                // We need to know if we can drop this register safely, as
+                // tmp registers are intended to be dropped manually.
+                if drop_unused(guest_reg, host_reg) {
+                    self.free_regs.insert(host_reg);
+                    unused = Some(host_reg);
+                    break;
                 }
-                None
-            };
+            }
 
-            find_unused().expect("Could not drop any register")
+            unused.expect("Could not drop any register")
         };
 
         // At this point we already know the key does not exist, that's why we call `insert_unique_unchecked`
@@ -92,7 +102,7 @@ impl Registers {
         host_reg
     }
 
-    pub fn find_host_register(&self, host_reg: X64Gpr) -> Option<(GuestRegister, X64Gpr)> {
+    pub fn find_host_register(&self, host_reg: Register) -> Option<(GuestRegister, Register)> {
         self.regs
             .iter()
             .map(|(g, HostRegister(r, _))| (*g, *r))
@@ -110,8 +120,8 @@ impl Registers {
             debug_assert_eq!(
                 self.free_regs.len(),
                 (0..16)
-                    .map(|r| X64Gpr::try_from(r).unwrap())
-                    .filter(|r| !r.is_reserved())
+                    .map(|r| Register::try_from(r).unwrap())
+                    .filter(|r| !is_reserved(r))
                     .collect::<Vec<_>>()
                     .len()
             );

@@ -2,16 +2,13 @@ use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
+use w64_codegen::register::Register;
+use w64_codegen::{emit, Emitter, ExecBuffer};
+
 use crate::cpu::instruction::{ImmediateType, Instruction};
-use crate::jit::codegen::CallArg;
 use crate::mmu::MemoryUnit;
 use crate::n64::State;
 
-use super::code::{CompiledBlock, RawBlock};
-use super::codegen::callable::Callable;
-use super::codegen::register::CALLEE_SAVED_REGISTERS;
-use super::codegen::AddressingMode;
-use super::codegen::{register::X64Gpr, Emitter};
 use super::register::{GuestRegister, Registers};
 
 /// Wasm codegen engine
@@ -23,7 +20,7 @@ impl JitEngine {
         Self {}
     }
 
-    pub fn compile_block(&self, state: Rc<RefCell<State>>) -> (CompiledBlock, usize) {
+    pub fn compile_block(&self, state: Rc<RefCell<State>>) -> (ExecBuffer, usize) {
         // TODO: Replace this with the actual number of cycles it should compile
         // For testing purposes, we will run a fixed amount of instructions
         let pclock_size = 5;
@@ -77,7 +74,7 @@ struct Jit {
     state: EmulatorState,
     pc: u64,
     regs: Registers,
-    code: RawBlock,
+    emitter: Emitter,
 }
 
 impl Jit {
@@ -85,18 +82,18 @@ impl Jit {
     pub fn new(state: Rc<RefCell<State>>) -> Self {
         let pc = { state.borrow().cpu.pc };
 
-        let code = RawBlock::new().unwrap();
+        let code = Emitter::new();
 
         Self {
             pc,
             state: EmulatorState::new(state),
             regs: Registers::new(),
-            code,
+            emitter: code,
         }
     }
 
     /// Compile the code
-    pub fn compile(mut self, cycles: usize) -> (CompiledBlock, usize) {
+    pub fn compile(mut self, cycles: usize) -> (ExecBuffer, usize) {
         tracing::debug!("Generating compiled block");
 
         // Initialize the code generation
@@ -108,9 +105,9 @@ impl Jit {
         // TODO: Sync guest registers with host registers
         // **********************************************
 
-        let compiled = match self.code.compile(self.state.clone()) {
+        let compiled = match self.emitter.finalize() {
             Ok(compiled) => compiled,
-            Err(error) => panic!("Could not compile the code: {error:?}"),
+            Err(error) => panic!("Could not compile the code properly: {error:?}"),
         };
 
         tracing::info!(
@@ -125,7 +122,9 @@ impl Jit {
     fn compile_block(&mut self, cycles: usize) -> usize {
         // save the state address into `rsi` so we can easily access guest registers later
         let state_addr = self.state.state_ptr() as *mut State as u64;
-        self.code.emit_movabs_reg(X64Gpr::Rsi, state_addr).unwrap();
+        emit!(self.emitter,
+            movabs rsi, $state_addr;
+        );
 
         let mut total_cycles = 0;
         while total_cycles < cycles {
@@ -160,9 +159,11 @@ impl Jit {
                 // - Get host register for `rt`
                 // - Move `immediate << 16` into host register
                 let host_rt = self.get_host_cpu_register(rt as usize);
-                self.code
-                    .emit_mov_reg_immediate(host_rt, (immediate as u64) << 16)
-                    .unwrap();
+                let imm = (immediate as u64) << 16;
+                emit!(self.emitter,
+                    mov %host_rt, $imm;
+                );
+
                 false
             }
             Instruction::ORI(ImmediateType {
@@ -176,19 +177,11 @@ impl Jit {
                 let host_rt = self.get_host_cpu_register(rt as usize);
 
                 let tmp_reg = self.get_tmp_register(0);
-                self.code
-                    .emit_mov_reg_immediate(tmp_reg, immediate as u64)
-                    .unwrap();
-
-                // TODO: Implement `emit_or_reg_reg`
-                // or host_rs, tmp_reg
-                self.code.emit_or_reg_reg(tmp_reg, host_rs).unwrap();
-                self.code
-                    .emit_mov(
-                        AddressingMode::Register(host_rt),
-                        AddressingMode::Register(tmp_reg),
-                    )
-                    .unwrap();
+                emit!(self.emitter,
+                    mov %tmp_reg, $immediate;
+                    or %tmp_reg, %host_rs;
+                    mov %host_rt, %tmp_reg;
+                );
 
                 self.regs.drop_guest_register(GuestRegister::Tmp(0));
 
@@ -200,8 +193,6 @@ impl Jit {
                 immediate: offset,
                 ..
             }) => {
-                // TODO: 64-bit offset support
-
                 fn mmu_store(state: *mut State, vaddr: usize, rt: u64) {
                     let State { cpu, mmu } = unsafe { &mut *state };
 
@@ -215,30 +206,31 @@ impl Jit {
                     let offset_ex = offset as i16 as usize;
                     let base = self.host_reg_from_guest(GuestRegister::Cpu(base as usize));
 
-                    self.code
-                        .emit_mov_reg_immediate(vaddr_reg, offset_ex as u64)
-                        .unwrap();
-                    self.code.emit_add_reg_reg(vaddr_reg, base).unwrap();
+                    emit!(self.emitter,
+                        mov %vaddr_reg, $offset_ex;
+                        add %vaddr_reg, %base;
+                    );
                 }
 
-                self.sync_guest_register(X64Gpr::Rdx);
-                self.code.emit_push_reg(X64Gpr::Rsi).unwrap();
+                self.sync_guest_register(Register::Rdx);
                 let rt = self.get_host_cpu_register(rt as usize);
-                self.code
-                    .emit_mov(
-                        AddressingMode::Register(X64Gpr::Rdx),
-                        AddressingMode::Register(rt),
-                    )
-                    .unwrap();
-                self.emit_call_wrapper(
-                    mmu_store as fn(_, _, _),
-                    &[
-                        CallArg::Val(self.state.state_ptr() as u64),
-                        CallArg::Reg(vaddr_reg),
-                    ],
-                    None,
+
+                emit!(self.emitter,
+                    push rsi;
+                    mov rdx, %rt;
                 );
-                self.code.emit_pop_reg(X64Gpr::Rsi).unwrap();
+                // self.emit_call_wrapper(
+                //     mmu_store as fn(_, _, _),
+                //     &[
+                //         // CallArg::Val(self.state.state_ptr() as u64),
+                //         // CallArg::Reg(vaddr_reg),
+                //     ],
+                //     None,
+                // );
+                // TODO: ^^^^^^^^^^^^^^^^^^^^^^^
+                emit!(self.emitter,
+                    pop rsi;
+                );
 
                 true
             }
@@ -246,59 +238,58 @@ impl Jit {
         }
     }
 
-    fn emit_call_wrapper<const N: usize, I, O, C: Callable<N, I, O>>(
-        &mut self,
-        funct: C,
-        args: &[CallArg],
-        return_to: Option<X64Gpr>,
-    ) {
-        self.code.emit_push_reg(X64Gpr::Rsi).unwrap();
+    // fn emit_call_wrapper<const N: usize, I, O, C: Callable<N, I, O>>(
+    //     &mut self,
+    //     funct: C,
+    //     args: &[CallArg],
+    //     return_to: Option<X64Gpr>,
+    // ) {
+    //     self.emitter.emit_push_reg(X64Gpr::Rsi).unwrap();
 
-        let mut tmp_regs = Vec::new();
-        for (guest, host) in self.regs.iter() {
-            match guest {
-                GuestRegister::Tmp(_) => {
-                    if !CALLEE_SAVED_REGISTERS.contains(&host) {
-                        self.code.emit_push_reg(host).unwrap();
-                        tmp_regs.insert(0, host);
-                    }
-                }
-                _ => self.sync_guest_register(host),
-            }
-        }
+    //     let mut tmp_regs = Vec::new();
+    //     for (guest, host) in self.regs.iter() {
+    //         match guest {
+    //             GuestRegister::Tmp(_) => {
+    //                 if !CALLEE_SAVED_REGISTERS.contains(&host) {
+    //                     self.emitter.emit_push_reg(host).unwrap();
+    //                     tmp_regs.insert(0, host);
+    //                 }
+    //             }
+    //             _ => self.sync_guest_register(host),
+    //         }
+    //     }
 
-        self.code.emit_call(funct, args).unwrap();
-        return_to.map(|ret| {
-            self.code.emit_mov(
-                AddressingMode::Register(ret),
-                AddressingMode::Register(X64Gpr::Rax),
-            )
-        });
+    //     self.emitter.emit_call(funct, args).unwrap();
+    //     return_to.map(|ret| {
+    //         self.emitter.emit_mov(
+    //             AddressingMode::Register(ret),
+    //             AddressingMode::Register(X64Gpr::Rax),
+    //         )
+    //     });
 
-        for host in tmp_regs.into_iter() {
-            self.code.emit_pop_reg(host).unwrap();
-        }
+    //     for host in tmp_regs.into_iter() {
+    //         self.emitter.emit_pop_reg(host).unwrap();
+    //     }
 
-        self.code.emit_pop_reg(X64Gpr::Rsi).unwrap();
-    }
+    //     self.emitter.emit_pop_reg(X64Gpr::Rsi).unwrap();
+    // }
 
-    fn get_host_cpu_register(&mut self, register: usize) -> X64Gpr {
+    fn get_host_cpu_register(&mut self, register: usize) -> Register {
         let host_reg = self.host_reg_from_guest(GuestRegister::Cpu(register));
 
         // load the register value
         let reg_offset = self.state.offset_of(|state| &state.cpu.gpr[register]);
-        self.code
-            .emit_mov_reg_qword_ptr(host_reg, reg_offset)
-            .unwrap();
-
+        emit!(self.emitter,
+            mov %host_reg, [$reg_offset];
+        );
         host_reg
     }
-    fn get_tmp_register(&mut self, register: usize) -> X64Gpr {
+    fn get_tmp_register(&mut self, register: usize) -> Register {
         self.host_reg_from_guest(GuestRegister::Tmp(register))
     }
 
     /// Gets an unused host register from a guest one
-    fn host_reg_from_guest(&mut self, guest_reg: GuestRegister) -> X64Gpr {
+    fn host_reg_from_guest(&mut self, guest_reg: GuestRegister) -> Register {
         self.regs
             .get_mapped_register(guest_reg, |old_guest_reg, host_reg| {
                 let old_guest_reg_offset = match old_guest_reg {
@@ -307,17 +298,17 @@ impl Jit {
                         .state
                         .offset_of(|state| state.cpu.cp0.get_register(reg)),
                     GuestRegister::Tmp(_) => return false,
-                };
+                } as i32;
 
-                self.code
-                    .emit_mov_rsi_rel_reg(old_guest_reg_offset as i32, host_reg)
-                    .unwrap();
+                emit!(self.emitter,
+                    mov [rsi + $old_guest_reg_offset], %host_reg;
+                );
 
                 true
             })
     }
 
-    fn sync_guest_register(&mut self, reg: X64Gpr) {
+    fn sync_guest_register(&mut self, reg: Register) {
         if let Some((guest_reg, host_reg)) = self.regs.find_host_register(reg) {
             let guest_offset = match guest_reg {
                 GuestRegister::Cpu(reg) => self.state.offset_of(|state| &state.cpu.gpr[reg]),
@@ -325,12 +316,12 @@ impl Jit {
                     .state
                     .offset_of(|state| state.cpu.cp0.get_register(reg)),
                 GuestRegister::Tmp(_) => return,
-            };
+            } as i32;
 
             debug_assert!(guest_offset <= i32::MAX as _);
-            self.code
-                .emit_mov_rsi_rel_reg(guest_offset as i32, host_reg)
-                .unwrap();
+            emit!(self.emitter,
+                mov [rsi + $guest_offset], %host_reg;
+            );
             self.regs.drop_guest_register(guest_reg);
         }
     }

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
     Rax = 0,
     Rcx = 1,
@@ -67,6 +67,18 @@ impl TryFrom<&str> for Register {
             _ => return Err(()),
         };
         Ok(reg)
+    }
+}
+
+impl TryFrom<u8> for Register {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value > 15 {
+            Err(())
+        } else {
+            unsafe { std::mem::transmute(value) }
+        }
     }
 }
 

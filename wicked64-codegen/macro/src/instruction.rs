@@ -4,7 +4,6 @@ use syn::{
     parse::{Parse, ParseStream},
     Ident, Token,
 };
-use w64_codegen_types::register::Register;
 
 use crate::addressing::{AddrImmediate, AddrRegister, AddressingMode, CallArgs};
 
@@ -14,9 +13,9 @@ pub enum Instruction {
     Push(AddrRegister),
     Pop(AddrRegister),
     Add(AddrRegister, AddressingMode),
-    Or(Register, AddressingMode),
+    Or(AddrRegister, AddressingMode),
     Sub(AddrRegister, AddressingMode),
-    Xor(Register, AddressingMode),
+    Xor(AddrRegister, AddressingMode),
     Call(AddressingMode),
     CallFn(Ident, CallArgs),
     Ret,

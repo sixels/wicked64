@@ -9,6 +9,14 @@ use crate::{
     token::Slice,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum Operation {
+    Add = 0b000,
+    Or = 0b001,
+    Sub = 0b101,
+}
+
 pub fn emit(instruction: Instruction) -> TokenStream {
     match instruction {
         Instruction::Mov(dst, src) => emit_mov(dst, src),
@@ -16,7 +24,7 @@ pub fn emit(instruction: Instruction) -> TokenStream {
         Instruction::Push(reg) => emit_push(reg),
         Instruction::Pop(reg) => emit_pop(reg),
         Instruction::Add(dst, src) => emit_op(Operation::Add, dst, src),
-        // Instruction::Or(_, _) => todo!(),
+        Instruction::Or(dst, src) => emit_op(Operation::Or, dst, src),
         Instruction::Sub(dst, src) => emit_op(Operation::Sub, dst, src),
         // Instruction::Xor(_, _) => todo!(),
         Instruction::Call(addr) => emit_call(addr),
@@ -167,23 +175,28 @@ fn emit_pop(reg: AddrRegister) -> TokenStream {
     }
 }
 
+// TODO: ADD TESTS
 fn emit_op(op: Operation, dst: AddrRegister, src: AddressingMode) -> TokenStream {
-    let opcode = op as u8;
-    let axcode = (opcode << 3) | 0b101;
-    match src {
-        AddressingMode::Immediate(imm) => {
-            quote! {
-                let base = 0x48 | u8::from(#dst >= Register::R8);
-                if #dst == Register::Rax {
-                    buf.emit_raw(&[base, #axcode]);
-                } else {
-                    let mod_rm = (0b11 << 6) | (#opcode << 3) | (#dst as u8);
-                    buf.emit_raw(&[base, 0x81, mod_rm]);
-                }
-                buf.emit_dword(#imm as u32);
-            }
-        }
+    let op = op as u8;
+    let (op_code, sufix) = match src {
+        AddressingMode::Immediate(imm) => (0b101, quote! { buf.emit_dword(#imm as u32); }),
+        AddressingMode::Register(src) => (
+            0b001,
+            quote! { buf.emit_byte((0b11 << 6) | ((#src as u8) << 3) | ((#dst as u8) << 0)); },
+        ),
         _ => unimplemented!(),
+    };
+    let op_code = (op << 3) | op_code;
+
+    quote! {
+        let base = 0x48 | u8::from(#dst >= Register::R8);
+        if #dst == Register::Rax {
+            buf.emit_raw(&[base, #op_code]);
+        } else {
+            let mod_rm = (0b11 << 6) | ((#op as u8) << 3) | (#dst as u8);
+            buf.emit_raw(&[base, 0x81, mod_rm]);
+        }
+        #sufix
     }
 }
 
@@ -345,11 +358,4 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
     });
 
     ts
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-enum Operation {
-    Add = 0b000,
-    Sub = 0b101,
 }

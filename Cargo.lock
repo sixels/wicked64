@@ -127,15 +127,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "memmap2"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a79b39c93a7a5a27eeaf9a23b5ff43f1b9e0ad6b1cdd441140ae53c35613fc7"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "num_enum"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -392,11 +383,11 @@ dependencies = [
  "byteorder",
  "enum_dispatch",
  "hashbrown",
- "memmap2",
  "num_enum",
  "once_cell",
  "tracing",
  "tracing-subscriber",
+ "w64-codegen",
 ]
 
 [[package]]

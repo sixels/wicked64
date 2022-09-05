@@ -1,6 +1,8 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
-use crate::jit::{code::CompiledBlock, engine::JitEngine};
+use w64_codegen::ExecBuffer;
+
+use crate::jit::engine::JitEngine;
 use crate::n64::State;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -9,8 +11,28 @@ enum CacheRange {
     End,
 }
 
+pub struct CompiledBlock {
+    state: Rc<RefCell<State>>,
+    exec_buf: ExecBuffer,
+}
+
+impl CompiledBlock {
+    pub fn new(state: Rc<RefCell<State>>, buf: ExecBuffer) -> Self {
+        Self {
+            state,
+            exec_buf: buf,
+        }
+    }
+
+    pub(crate) fn execute(&self) -> usize {
+        let _ = self.state.borrow_mut();
+        self.exec_buf.execute();
+        0
+    }
+}
+
 pub struct Cache {
-    jit_engine: JitEngine,
+    jit: JitEngine,
     blocks: hashbrown::HashMap<usize, CompiledBlock>,
     compiled_addrs: BTreeMap<usize, CacheRange>,
 }
@@ -21,15 +43,20 @@ impl Cache {
         let block = self.blocks.entry(addr).or_insert_with(|| {
             tracing::debug!("Generating cache for address '0x{addr:08x}'");
 
-            let (block, len) = self.jit_engine.compile_block(state);
-
+            let (buf, len) = self.jit.compile_block(state.clone());
+            // self.insert_range(addr, addr + len);
             self.compiled_addrs.insert(addr, CacheRange::Start);
             self.compiled_addrs.insert(addr + len, CacheRange::End);
 
-            block
+            CompiledBlock::new(state, buf)
         });
         block
     }
+
+    // fn insert_range(&mut self, start: usize, end: usize) {
+    //     self.compiled_addrs.insert(start, CacheRange::Start);
+    //     self.compiled_addrs.insert(end, CacheRange::End);
+    // }
 
     // /// Check if an arbitrary address is cached
     // pub fn is_addr_compiled(&self, addr: usize) -> bool {
@@ -44,7 +71,7 @@ impl Default for Cache {
     /// Creates a new cache manager for jitted instructions
     fn default() -> Cache {
         Self {
-            jit_engine: JitEngine::new(),
+            jit: JitEngine::new(),
             blocks: Default::default(),
             compiled_addrs: Default::default(),
         }
