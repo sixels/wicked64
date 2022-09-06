@@ -34,7 +34,7 @@ fn call_many() {
         string: &'s str,
     }
 
-    let (pa, pb) = (0xfe, -0x21f0);
+    let (pa, pb): (u8, i32) = (0xfe, -0x21f0);
     fn primitives(a: u8, b: i32) {
         assert_eq!(a, 0xfe);
         assert_eq!(b, -0x21f0);
