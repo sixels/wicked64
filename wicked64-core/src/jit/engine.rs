@@ -24,7 +24,7 @@ impl JitEngine {
         // TODO: Replace this with the actual number of cycles it should compile
         // For testing purposes, we will run a fixed amount of instructions
         let pclock_size = 5;
-        let n_instructions = 10 * pclock_size;
+        let n_instructions = 1 * pclock_size;
 
         Jit::new(state).compile(n_instructions)
     }
@@ -82,13 +82,11 @@ impl Jit {
     pub fn new(state: Rc<RefCell<State>>) -> Self {
         let pc = { state.borrow().cpu.pc };
 
-        let code = Emitter::new();
-
         Self {
             pc,
             state: EmulatorState::new(state),
             regs: Registers::new(),
-            emitter: code,
+            emitter: Emitter::default(),
         }
     }
 
@@ -105,7 +103,7 @@ impl Jit {
         // TODO: Sync guest registers with host registers
         // **********************************************
 
-        let compiled = match self.emitter.finalize() {
+        let compiled = match unsafe { self.emitter.make_exec() } {
             Ok(compiled) => compiled,
             Err(error) => panic!("Could not compile the code properly: {error:?}"),
         };
@@ -123,6 +121,7 @@ impl Jit {
         // save the state address into `rsi` so we can easily access guest registers later
         let state_addr = self.state.state_ptr() as *mut State as u64;
         emit!(self.emitter,
+            push rsi;
             movabs rsi, $state_addr;
         );
 
@@ -144,6 +143,11 @@ impl Jit {
                 break;
             }
         }
+
+        emit!(self.emitter,
+            pop rsi;
+            pop rax;
+        );
 
         total_cycles
     }
@@ -280,7 +284,7 @@ impl Jit {
         // load the register value
         let reg_offset = self.state.offset_of(|state| &state.cpu.gpr[register]);
         emit!(self.emitter,
-            mov %host_reg, [$reg_offset];
+            mov %host_reg, [rsi + $reg_offset];
         );
         host_reg
     }
