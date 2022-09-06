@@ -39,37 +39,37 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
         (AddressingMode::Immediate(_), _) => panic!("Invalid mov destination"),
         (AddressingMode::Register(dst), AddressingMode::Register(src)) => {
             quote! {
-                let base = (0b1001 << 3)
+                let __base__ = (0b1001 << 3)
                     | (u8::from(#src >= Register::R8) << 2)
                     | (u8::from(#dst >= Register::R8) << 0);
 
-                let s = (#src as u8) % 8;
-                let d = (#dst as u8) % 8;
-                let mod_rm = (0b11 << 6) | (s << 3) | (d << 0);
+                let __s__ = (#src as u8) % 8;
+                let __d__ = (#dst as u8) % 8;
+                let __mod_rm__ = (0b11 << 6) | (__s__ << 3) | (__d__ << 0);
 
-                buf.emit_raw(&[base, 0x89, mod_rm]);
+                buf.emit_raw(&[__base__, 0x89, __mod_rm__]);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Immediate(imm)) => {
             quote! {
-                let d = (#dst as u8) % 8;
-                let base = d + 0xb8;
+                let __d__ = (#dst as u8) % 8;
+                let __base__ = __d__ + 0xb8;
 
                 if #dst >= Register::R8 {
                     buf.emit_byte(0x41);
                 }
-                buf.emit_byte(base);
+                buf.emit_byte(__base__);
                 buf.emit_dword(#imm as i32 as u32);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
             quote! {
-                let base = (0b1001 << 3) | (u8::from(#dst >= Register::R8) << 2);
+                let __base__ = (0b1001 << 3) | (u8::from(#dst >= Register::R8) << 2);
 
-                let d = (#dst as u8) % 8;
-                let mod_rm = (0b00 << 6) | (d << 3) | (0b100 << 0);
+                let __d__ = (#dst as u8) % 8;
+                let __mod_rm__ = (0b00 << 6) | (__d__ << 3) | (0b100 << 0);
 
-                buf.emit_raw(&[base, 0x8b, mod_rm, 0x25]);
+                buf.emit_raw(&[__base__, 0x8b, __mod_rm__, 0x25]);
                 buf.emit_dword(#addr as i32 as u32);
             }
         }
@@ -82,22 +82,22 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             };
 
             quote! {
-                let base = (0b1001 << 3)
+                let __base__ = (0b1001 << 3)
                     | (u8::from(#dst >= Register::R8) << 2)
                     | (u8::from(#src >= Register::R8) << 0);
 
-                let mode = u8::from(#disp != 0) << 1;
-                let s = (#src as u8) % 8;
-                let d = (#dst as u8) % 8;
-                let mod_rm = (mode << 6) | (d << 3) | (s << 0);
+                let __mode__ = u8::from(#disp != 0) << 1;
+                let __s__ = (#src as u8) % 8;
+                let __d__ = (#dst as u8) % 8;
+                let __mod_rm__ = (__mode__ << 6) | (__d__ << 3) | (__s__ << 0);
 
-                buf.emit_raw(&[base, 0x8b, mod_rm]);
+                buf.emit_raw(&[__base__, 0x8b, __mod_rm__]);
                 if #src == Register::Rsp {
                     buf.emit_byte(0x24);
                 }
-                if mode != 0 {
-                    let disp = #disp as i32;
-                    buf.emit_dword(if #neg { -disp } else { disp } as u32 );
+                if __mode__ != 0 {
+                    let __disp__ = #disp as i32;
+                    buf.emit_dword(if #neg { -__disp__ } else { __disp__ } as u32 );
                 }
             }
         }
@@ -111,22 +111,22 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
             };
 
             quote! {
-                let base = (0b1001 << 3)
+                let __base__ = (0b1001 << 3)
                     | (u8::from(#src >= Register::R8) << 2)
                     | (u8::from(#dst >= Register::R8) << 0);
 
-                let mode = u8::from(#disp != 0) << 1;
-                let s = (#src as u8) % 8;
-                let d = (#dst as u8) % 8;
-                let mod_rm = (mode << 6) | (s << 3) | (d << 0);
+                let __mode__ = u8::from(#disp != 0) << 1;
+                let __s__ = (#src as u8) % 8;
+                let __d__ = (#dst as u8) % 8;
+                let __mod_rm__ = (__mode__ << 6) | (__s__ << 3) | (__d__ << 0);
 
-                buf.emit_raw(&[base, 0x89, mod_rm]);
+                buf.emit_raw(&[__base__, 0x89, __mod_rm__]);
                 if #dst == Register::Rsp {
                     buf.emit_byte(0x24);
                 }
-                if mode != 0 {
-                    let disp = #disp as i32;
-                    buf.emit_dword(if #neg { -disp } else { disp } as u32 );
+                if __mode__ != 0 {
+                    let __disp__ = #disp as i32;
+                    buf.emit_dword(if #neg { -__disp__ } else { __disp__ } as u32 );
                 }
             }
         }
@@ -139,10 +139,10 @@ fn emit_movabs(dst: AddressingMode, src: AddrImmediate) -> TokenStream {
         AddressingMode::Immediate(_) => panic!("Invalid movabs destination"),
         AddressingMode::Register(AddrRegister::Var(dst)) => {
             quote! {
-                let base = if #dst >= Register::R8 { 0x49 } else { 0x48 };
-                let d = #dst as u8 % 8;
+                let __base__ = if #dst >= Register::R8 { 0x49 } else { 0x48 };
+                let __d__ = #dst as u8 % 8;
 
-                buf.emit_raw(&[base, 0xb8 + d]);
+                buf.emit_raw(&[__base__, 0xb8 + __d__]);
                 buf.emit_qword(#src as u64);
             }
         }
@@ -157,21 +157,19 @@ fn emit_movabs(dst: AddressingMode, src: AddrImmediate) -> TokenStream {
 
 fn emit_push(reg: AddrRegister) -> TokenStream {
     quote! {
-        let r = #reg as u8 % 8;
         if #reg >= Register::R8 {
             buf.emit_byte(0x41);
         }
-        buf.emit_byte(0x50 | r);
+        buf.emit_byte(0x50 | (#reg as u8 % 8));
     }
 }
 
 fn emit_pop(reg: AddrRegister) -> TokenStream {
     quote! {
-        let r = #reg as u8 % 8;
         if #reg >= Register::R8 {
             buf.emit_byte(0x41);
         }
-        buf.emit_byte(0x58 + r);
+        buf.emit_byte(0x58 + (#reg as u8 % 8));
     }
 }
 
@@ -189,12 +187,12 @@ fn emit_op(op: Operation, dst: AddrRegister, src: AddressingMode) -> TokenStream
     let op_code = (op << 3) | op_code;
 
     quote! {
-        let base = 0x48 | u8::from(#dst >= Register::R8);
+        let __base__ = 0x48 | u8::from(#dst >= Register::R8);
         if #dst == Register::Rax {
-            buf.emit_raw(&[base, #op_code]);
+            buf.emit_raw(&[__base__, #op_code]);
         } else {
-            let mod_rm = (0b11 << 6) | ((#op as u8) << 3) | (#dst as u8);
-            buf.emit_raw(&[base, 0x81, mod_rm]);
+            let __mod_rm__ = (0b11 << 6) | ((#op as u8) << 3) | (#dst as u8);
+            buf.emit_raw(&[__base__, 0x81, __mod_rm__]);
         }
         #sufix
     }
@@ -255,8 +253,8 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
     // set the stack size
     if stack_size > 0 {
         ts.extend(quote! {
-            let mut stack_index = #stack_size;
-            let mut saved: [Option<usize>; 16] = [None; 16];
+            let mut __stack_index__ = #stack_size;
+            let mut __saved__: [Option<usize>; 16] = [None; 16];
             _emit_instructions! {
                 sub rsp, #stack_size;
             };
@@ -270,40 +268,41 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
 
     if !reg_args.is_empty() {
         ts.extend(quote! {
-            let reg_args: &[Register] = &#reg_args;
+            let __reg_args__: &[Register] = &#reg_args;
         });
     }
 
     macro_rules! save_reg {
-        ($regs:expr, $cmp:expr) => {
+        ($reg:expr, $cmp:expr) => {
             quote! {
-                if $regs.iter().find(|&&r| r == dst && $cmp).is_some() && saved[dst as usize].is_none() {
-                    stack_index -= #ptr_size;
-                    saved[dst as usize] = Some(stack_index);
+                let __cmp_reg__ = $reg;
+                if __reg_args__.iter().find(|&&r| r == __cmp_reg__ && $cmp).is_some() && __saved__[__cmp_reg__ as usize].is_none() {
+                    __stack_index__ -= #ptr_size;
+                    __saved__[__cmp_reg__ as usize] = Some(__stack_index__);
                     _emit_instructions! {
-                        mov [rsp + $stack_index], %dst;
+                        mov [rsp + $__stack_index__], %__cmp_reg__;
                     };
                 }
             }
         };
-        ($regs:expr) => {
-            save_reg!($regs, true)
+        ($reg:expr) => {
+            save_reg!($reg, true)
         };
     }
 
     for (dst, src) in ARGS_REGS.iter().zip(args.0.iter()) {
         match src {
             Argument::Register(src) => {
-                ts.extend(quote! { let dst = #dst; let src = #src; });
-                ts.extend(save_reg!(reg_args));
+                ts.extend(quote! { let __dst__ = #dst; let __src__ = #src; });
+                ts.extend(save_reg!(__dst__));
                 ts.extend(quote! {
-                    if let Some(index) = saved[src as usize] {
+                    if let Some(__index__) = __saved__[__src__ as usize] {
                         _emit_instructions!{
-                            mov %dst, [rsp + $index];
+                            mov %__dst__, [rsp + $__index__];
                         };
                     } else {
                         _emit_instructions!{
-                            mov %dst, %src;
+                            mov %__dst__, %__src__;
                         };
                     }
                 });
@@ -311,23 +310,23 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
             Argument::Immediate(_) | Argument::Ref(_) => {
                 match src {
                     Argument::Immediate(src) => {
-                        ts.extend(quote! { let dst = #dst; let src = #src; })
+                        ts.extend(quote! { let __dst__ = #dst; let __src__ = #src; })
                     }
                     Argument::Ref(src) => ts.extend(quote! {
-                        let dst = #dst;
-                        let src = #src;
+                        let __dst__ = #dst;
+                        let __src__ = #src;
 
-                        assert_sized(src);
-                        let src = src as *const _ as *const u8 as usize;
+                        assert_sized(__src__);
+                        let __src__ = __src__ as *const _ as *const u8 as usize;
                     }),
                     _ => unreachable!(),
                 }
                 if !reg_args.is_empty() {
-                    ts.extend(save_reg!(reg_args));
+                    ts.extend(save_reg!(__dst__));
                 }
                 ts.extend(quote! {
                     _emit_instructions!{
-                        movabs %dst, $src;
+                        movabs %__dst__, $__src__;
                     };
                 });
             }
@@ -344,9 +343,9 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
     });
     // call the function
     ts.extend(quote! {
-        let funct = #funct as fn #cast_args -> _ as usize;
+        let __funct__ = #funct as fn #cast_args -> _ as usize;
         _emit_instructions! {
-            movabs rax, $funct;
+            movabs rax, $__funct__;
             call rax;
         }
     });
