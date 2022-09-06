@@ -12,9 +12,9 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 enum Operation {
-    Add = 0b000,
-    Or = 0b001,
-    Sub = 0b101,
+    Add = 0,
+    Or = 1,
+    Sub = 5,
 }
 
 pub fn emit(instruction: Instruction) -> TokenStream {
@@ -175,27 +175,37 @@ fn emit_pop(reg: AddrRegister) -> TokenStream {
 
 // TODO: ADD TESTS
 fn emit_op(op: Operation, dst: AddrRegister, src: AddressingMode) -> TokenStream {
-    let op = op as u8;
-    let (op_code, sufix) = match src {
-        AddressingMode::Immediate(imm) => (0b101, quote! { buf.emit_dword(#imm as u32); }),
-        AddressingMode::Register(src) => (
-            0b001,
-            quote! { buf.emit_byte((0b11 << 6) | ((#src as u8) << 3) | ((#dst as u8) << 0)); },
-        ),
-        _ => unimplemented!(),
-    };
-    let op_code = (op << 3) | op_code;
+    let id = op as u8;
 
-    quote! {
+    let mut ts = quote! {
         let __base__ = 0x48 | u8::from(#dst >= Register::R8);
-        if #dst == Register::Rax {
-            buf.emit_raw(&[__base__, #op_code]);
-        } else {
-            let __mod_rm__ = (0b11 << 6) | ((#op as u8) << 3) | (#dst as u8);
-            buf.emit_raw(&[__base__, 0x81, __mod_rm__]);
+        buf.emit_byte(__base__);
+    };
+
+    ts.extend(match src {
+        AddressingMode::Immediate(imm) => {
+            quote! {
+                if #dst == Register::Rax {
+                    buf.emit_byte((#id << 3) | 0b101);
+                } else {
+                    buf.emit_byte(0x81);
+                }
+                buf.emit_dword(#imm as u32);
+            }
         }
-        #sufix
-    }
+        AddressingMode::Register(src) => {
+            quote! {
+                buf.emit_raw(&[
+                    (#id << 3) | 0b001,
+                    (0b11 << 6) | ((#src as u8) << 3) | ((#dst as u8) << 0)
+                ]);
+            }
+        }
+
+        _ => unimplemented!(),
+    });
+
+    ts
 }
 
 fn emit_call(addr: AddressingMode) -> TokenStream {
@@ -253,7 +263,7 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
     // set the stack size
     if stack_size > 0 {
         ts.extend(quote! {
-            let mut __stack_index__ = #stack_size;
+            let mut __stack_index__: usize = #stack_size;
             let mut __saved__: [Option<usize>; 16] = [None; 16];
             _emit_instructions! {
                 sub rsp, #stack_size;
@@ -275,7 +285,7 @@ fn emit_call_fn(funct: Ident, args: CallArgs) -> TokenStream {
     macro_rules! save_reg {
         ($reg:expr, $cmp:expr) => {
             quote! {
-                let __cmp_reg__ = $reg;
+                let __cmp_reg__: Register = $reg;
                 if __reg_args__.iter().find(|&&r| r == __cmp_reg__ && $cmp).is_some() && __saved__[__cmp_reg__ as usize].is_none() {
                     __stack_index__ -= #ptr_size;
                     __saved__[__cmp_reg__ as usize] = Some(__stack_index__);
