@@ -45,9 +45,8 @@ impl<O: ByteOrder> N64<O> {
         let code = self.cache.get_or_compile(phys_pc, state);
 
         tracing::info!("Running generated code");
-        let clocks = code.execute();
-
-        self.clocks += clocks; // TODO
+        code.execute();
+        tracing::info!("Ok");
     }
 }
 

@@ -24,7 +24,7 @@ impl JitEngine {
         // TODO: Replace this with the actual number of cycles it should compile
         // For testing purposes, we will run a fixed amount of instructions
         let pclock_size = 5;
-        let n_instructions = 1 * pclock_size;
+        let n_instructions = 0 * pclock_size;
 
         Jit::new(state).compile(n_instructions)
     }
@@ -121,6 +121,7 @@ impl Jit {
         // save the state address into `rsi` so we can easily access guest registers later
         let state_addr = self.state.state_ptr() as *mut State as u64;
         emit!(self.emitter,
+            push rax;
             push rsi;
             movabs rsi, $state_addr;
         );
@@ -147,6 +148,7 @@ impl Jit {
         emit!(self.emitter,
             pop rsi;
             pop rax;
+            ret;
         );
 
         total_cycles
