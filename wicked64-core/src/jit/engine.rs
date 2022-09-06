@@ -1,15 +1,16 @@
 use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
-use w64_codegen::register::Register;
+use w64_codegen::register::{Register, CALLEE_SAVED_REGISTERS};
 use w64_codegen::{emit, Emitter, ExecBuffer};
 
 use crate::cpu::instruction::{ImmediateType, Instruction};
+use crate::jit::register::GuestRegisterKind;
 use crate::mmu::MemoryUnit;
 use crate::n64::State;
 
 use super::register::{GuestRegister, Registers};
+use super::state::EmulatorState;
 
 /// Wasm codegen engine
 #[derive(Debug)]
@@ -24,48 +25,9 @@ impl JitEngine {
         // TODO: Replace this with the actual number of cycles it should compile
         // For testing purposes, we will run a fixed amount of instructions
         let pclock_size = 5;
-        let n_instructions = 0 * pclock_size;
+        let n_instructions = 1 * pclock_size;
 
         Jit::new(state).compile(n_instructions)
-    }
-}
-
-struct EmulatorState(Rc<RefCell<State>>);
-
-impl EmulatorState {
-    pub fn new(state: Rc<RefCell<State>>) -> Self {
-        Self(state)
-    }
-
-    pub fn offset_of<F, T>(&self, get_offset: F) -> usize
-    where
-        F: FnOnce(&State) -> &T,
-    {
-        let state = self.0.borrow();
-
-        let data_addr = get_offset(&state) as *const T as usize;
-        let state_addr = self.state_ptr() as usize;
-
-        debug_assert!(state_addr <= data_addr);
-        data_addr - state_addr
-    }
-
-    pub fn state_ptr(&self) -> *const State {
-        &*self.0.borrow()
-    }
-}
-
-impl Deref for EmulatorState {
-    type Target = Rc<RefCell<State>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for EmulatorState {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -75,6 +37,7 @@ struct Jit {
     pc: u64,
     regs: Registers,
     emitter: Emitter,
+    saved_regs: Vec<Register>,
 }
 
 impl Jit {
@@ -87,6 +50,7 @@ impl Jit {
             state: EmulatorState::new(state),
             regs: Registers::new(),
             emitter: Emitter::default(),
+            saved_regs: Vec::new(),
         }
     }
 
@@ -145,6 +109,14 @@ impl Jit {
             }
         }
 
+        // if we used a callee-saved register, we need to restore then at the end
+        // of the code
+        for reg in self.saved_regs.iter().rev().copied() {
+            emit!(self.emitter,
+                pop %reg;
+            );
+        }
+
         emit!(self.emitter,
             pop rsi;
             pop rax;
@@ -164,7 +136,7 @@ impl Jit {
             Instruction::LUI(ImmediateType { rt, immediate, .. }) => {
                 // - Get host register for `rt`
                 // - Move `immediate << 16` into host register
-                let host_rt = self.get_host_cpu_register(rt as usize);
+                let host_rt = self.get_cpu_register(rt as usize);
                 let imm = (immediate as u64) << 16;
                 emit!(self.emitter,
                     mov %host_rt, $imm;
@@ -179,8 +151,8 @@ impl Jit {
                 // - Get host register for `rt`
                 // - Compute `*rs | immediate`, saving the result in a tmp register
                 // - Move the result into `rt`
-                let host_rs = self.get_host_cpu_register(rs as usize);
-                let host_rt = self.get_host_cpu_register(rt as usize);
+                let host_rs = self.get_cpu_register(rs as usize);
+                let host_rt = self.get_cpu_register(rt as usize);
 
                 let tmp_reg = self.get_tmp_register(0);
                 emit!(self.emitter,
@@ -189,7 +161,7 @@ impl Jit {
                     mov %host_rt, %tmp_reg;
                 );
 
-                self.regs.drop_guest_register(GuestRegister::Tmp(0));
+                self.regs.drop(GuestRegister::tmp(0));
 
                 false
             }
@@ -210,7 +182,7 @@ impl Jit {
                 let vaddr_reg = self.get_tmp_register(0);
                 {
                     let offset_ex = offset as i16 as usize;
-                    let base = self.host_reg_from_guest(GuestRegister::Cpu(base as usize));
+                    let base = self.get_cpu_register(base as usize);
 
                     emit!(self.emitter,
                         mov %vaddr_reg, $offset_ex;
@@ -218,8 +190,8 @@ impl Jit {
                     );
                 }
 
-                self.sync_guest_register(Register::Rdx);
-                let rt = self.get_host_cpu_register(rt as usize);
+                self.sync_register(Register::Rdx);
+                let rt = self.get_cpu_register(rt as usize);
 
                 emit!(self.emitter,
                     push rsi;
@@ -280,55 +252,74 @@ impl Jit {
     //     self.emitter.emit_pop_reg(X64Gpr::Rsi).unwrap();
     // }
 
-    fn get_host_cpu_register(&mut self, register: usize) -> Register {
-        let host_reg = self.host_reg_from_guest(GuestRegister::Cpu(register));
+    fn get_cpu_register(&mut self, register: usize) -> Register {
+        let host_reg = self.get_host_register(GuestRegister::cpu(register), false);
 
         // load the register value
         let reg_offset = self.state.offset_of(|state| &state.cpu.gpr[register]);
         emit!(self.emitter,
             mov %host_reg, [rsi + $reg_offset];
         );
+
         host_reg
     }
+
     fn get_tmp_register(&mut self, register: usize) -> Register {
-        self.host_reg_from_guest(GuestRegister::Tmp(register))
+        self.get_host_register(GuestRegister::tmp(register), true)
     }
 
-    /// Gets an unused host register from a guest one
-    fn host_reg_from_guest(&mut self, guest_reg: GuestRegister) -> Register {
-        self.regs
-            .get_mapped_register(guest_reg, |old_guest_reg, host_reg| {
-                let old_guest_reg_offset = match old_guest_reg {
-                    GuestRegister::Cpu(reg) => self.state.offset_of(|state| &state.cpu.gpr[reg]),
-                    GuestRegister::Cp0(reg) => self
-                        .state
-                        .offset_of(|state| state.cpu.cp0.get_register(reg)),
-                    GuestRegister::Tmp(_) => return false,
+    /// Gets a host register from the given guest register
+    fn get_host_register(&mut self, guest_reg: GuestRegister, locked: bool) -> Register {
+        if let Some(reg) = self.regs.get(&guest_reg) {
+            *reg
+        } else {
+            let (&reg, dropped) = self.regs.insert(guest_reg, locked).unwrap();
+
+            if CALLEE_SAVED_REGISTERS.contains(&reg) && !self.saved_regs.contains(&reg) {
+                emit!(self.emitter,
+                    push %reg;
+                );
+                self.saved_regs.push(reg);
+            }
+
+            if let Some(dropped) = dropped {
+                let id = dropped.id();
+                let guest_offset = match dropped.kind() {
+                    GuestRegisterKind::Cpu => self.state.offset_of(|state| &state.cpu.gpr[id]),
+                    // GuestRegisterKind::Cop0 => {
+                    //     self.state.offset_of(|state| state.cpu.cp0.get_register(id))
+                    // }
+                    GuestRegisterKind::Temporary => return reg,
                 } as i32;
 
                 emit!(self.emitter,
-                    mov [rsi + $old_guest_reg_offset], %host_reg;
+                    mov [rsi + $guest_offset], %reg;
                 );
-
-                true
-            })
+            };
+            reg
+        }
     }
 
-    fn sync_guest_register(&mut self, reg: Register) {
-        if let Some((guest_reg, host_reg)) = self.regs.find_host_register(reg) {
-            let guest_offset = match guest_reg {
-                GuestRegister::Cpu(reg) => self.state.offset_of(|state| &state.cpu.gpr[reg]),
-                GuestRegister::Cp0(reg) => self
-                    .state
-                    .offset_of(|state| state.cpu.cp0.get_register(reg)),
-                GuestRegister::Tmp(_) => return,
-            } as i32;
-
-            debug_assert!(guest_offset <= i32::MAX as _);
-            emit!(self.emitter,
-                mov [rsi + $guest_offset], %host_reg;
-            );
-            self.regs.drop_guest_register(guest_reg);
+    /// Sync the given host register with the emulator register
+    fn sync_register(&mut self, reg: Register) {
+        if let Some((guest_reg, host_reg)) = self.regs.find_by_host(reg) {
+            self.sync_guest_with(guest_reg, host_reg)
         }
+    }
+
+    fn sync_guest_with(&mut self, guest_reg: GuestRegister, host_reg: Register) {
+        let id = guest_reg.id();
+        let guest_offset = match guest_reg.kind() {
+            GuestRegisterKind::Cpu => self.state.offset_of(|state| &state.cpu.gpr[id]),
+            // GuestRegisterKind::Cop0 => {
+            //     self.state.offset_of(|state| state.cpu.cp0.get_register(id))
+            // }
+            GuestRegisterKind::Temporary => return,
+        } as i32;
+
+        emit!(self.emitter,
+            mov [rsi + $guest_offset], %host_reg;
+        );
+        self.regs.drop(guest_reg);
     }
 }

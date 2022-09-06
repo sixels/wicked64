@@ -3,39 +3,17 @@ use std::hash::Hash;
 use hashbrown::{HashMap, HashSet};
 use w64_codegen::register::Register;
 
-// use super::codegen::register::Register;
-
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Clone, Copy)]
-#[allow(dead_code)]
-pub enum GuestRegister {
-    Cpu(usize),
-    Cp0(usize),
-    Tmp(usize),
+#[derive(Debug)]
+pub enum InsertError {
+    AlreadyReserved,
+    NoRegistersAvailable,
 }
-
-#[derive(Debug, Clone, Copy)]
-struct HostRegister(Register, usize);
-
-impl Hash for HostRegister {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-type RegMap = HashMap<GuestRegister, HostRegister>;
 
 #[derive(Debug, Clone)]
 pub struct Registers {
-    regs: RegMap,
+    regs: HashMap<GuestRegister, HostRegister>,
     free_regs: HashSet<Register>,
-    borrow_count: usize,
-}
-
-pub fn is_reserved(register: &Register) -> bool {
-    match register {
-        Register::Rsi | Register::Rdi | Register::Rsp | Register::Rbp => true,
-        _ => false,
-    }
+    borrow_index: usize,
 }
 
 impl Registers {
@@ -46,86 +24,155 @@ impl Registers {
             .collect();
 
         Self {
-            regs: RegMap::new(),
+            regs: HashMap::new(),
             free_regs,
-            borrow_count: 0,
+            borrow_index: 0,
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (GuestRegister, Register)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&GuestRegister, &Register)> {
         self.regs
-            .clone()
-            .into_iter()
-            .map(|(g, HostRegister(h, _))| (g, h))
+            .iter()
+            .map(|(guest, HostRegister { register, .. })| (guest, register))
     }
 
-    pub fn get_mapped_register<F>(
+    /// Map a guest register with id `guest_reg` to a host register. If `lock`
+    /// is true, the register will not be dropped automatically, and need to be
+    /// manually dropped
+    pub fn insert(
         &mut self,
-        guest_reg: GuestRegister,
-        mut drop_unused: F,
-    ) -> Register
-    where
-        F: FnMut(GuestRegister, Register) -> bool,
-    {
-        if let Some(HostRegister(host_reg, borrowed)) = self.regs.get_mut(&guest_reg) {
-            *borrowed = self.borrow_count;
-            self.borrow_count += 1;
-            return *host_reg;
+        guest: GuestRegister,
+        locked: bool,
+    ) -> Result<(&Register, Option<GuestRegister>), InsertError> {
+        if let Some(_) = self.regs.get(&guest) {
+            return Err(InsertError::AlreadyReserved);
         }
 
-        let host_reg = if let Some(next) = self.free_regs.iter().next() {
-            // we still have free registers
-            *next
+        let mut dropped = None;
+        let host_register = if let Some(&next) = self.free_regs.iter().next() {
+            next
         } else {
             let mut unused_regs = self.regs.iter().collect::<Vec<_>>();
-            unused_regs.sort_by_key(|(_, HostRegister(_, n))| *n);
+            unused_regs.sort_by_key(|(_, HostRegister { borrow_index, .. })| borrow_index);
 
-            let mut unused = None;
-            for (&guest_reg, &HostRegister(host_reg, _)) in unused_regs.into_iter() {
+            for (&guest_register, host_register) in unused_regs.into_iter() {
                 // We need to know if we can drop this register safely, as
                 // tmp registers are intended to be dropped manually.
-                if drop_unused(guest_reg, host_reg) {
-                    self.free_regs.insert(host_reg);
-                    unused = Some(host_reg);
+                if !host_register.locked {
+                    self.free_regs.insert(host_register.register);
+                    dropped = Some((guest_register, host_register.register));
                     break;
                 }
             }
 
-            unused.expect("Could not drop any register")
+            match dropped {
+                Some((_, reg)) => reg,
+                None => return Err(InsertError::NoRegistersAvailable),
+            }
         };
 
         // At this point we already know the key does not exist, that's why we call `insert_unique_unchecked`
-        self.regs
-            .insert_unique_unchecked(guest_reg, HostRegister(host_reg, self.borrow_count));
-        self.free_regs.remove(&host_reg);
-        self.borrow_count += 1;
-        host_reg
+        self.free_regs.remove(&host_register);
+        let (_, HostRegister { ref register, .. }) = self.regs.insert_unique_unchecked(
+            guest,
+            HostRegister {
+                register: host_register,
+                borrow_index: self.borrow_index,
+                locked,
+            },
+        );
+        self.borrow_index += 1;
+
+        let dropped = dropped.map(|(guest, _)| guest);
+        Ok((register, dropped))
     }
 
-    pub fn find_host_register(&self, host_reg: Register) -> Option<(GuestRegister, Register)> {
+    /// Get the host register mapped by the given guest register
+    pub fn get(&mut self, guest_reg: &GuestRegister) -> Option<&Register> {
+        self.regs.get_mut(&guest_reg).map(|host| {
+            host.borrow_index = self.borrow_index;
+            self.borrow_index += 1;
+            &host.register
+        })
+    }
+
+    /// Finds the guest register using the given host register
+    pub fn find_by_host(&self, host_reg: Register) -> Option<(GuestRegister, Register)> {
         self.regs
             .iter()
-            .map(|(g, HostRegister(r, _))| (*g, *r))
+            .map(|(&guest, HostRegister { register, .. })| (guest, *register))
             .find(|(_, r)| *r == host_reg)
     }
 
-    pub fn drop_guest_register(&mut self, guest_reg: GuestRegister) {
+    /// Drops the given guest register, marking the host register as free to use
+    pub fn drop(&mut self, guest_reg: GuestRegister) {
         self.regs
             .remove(&guest_reg)
-            .map(|HostRegister(host_reg, _)| {
-                self.free_regs.insert(host_reg);
+            .map(|HostRegister { register, .. }| {
+                self.free_regs.insert(register);
             });
 
+        // reset the borrow index if there are no register mapped
         if self.regs.len() == 0 {
-            debug_assert_eq!(
-                self.free_regs.len(),
-                (0..16)
-                    .map(|r| Register::try_from(r).unwrap())
-                    .filter(|r| !is_reserved(r))
-                    .collect::<Vec<_>>()
-                    .len()
-            );
-            self.borrow_count = 0;
+            self.borrow_index = 0;
         }
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GuestRegister(u16);
+
+#[repr(u16)]
+pub enum GuestRegisterKind {
+    /// CPU register
+    Cpu,
+    // /// Coprocessor 0 register
+    // Cop0,
+    /// Temporary register
+    Temporary,
+}
+
+impl GuestRegister {
+    pub fn new(index: usize, kind: GuestRegisterKind) -> Self {
+        Self(((kind as u16) << 8) | (index as u16))
+    }
+    pub fn cpu(index: usize) -> Self {
+        Self::new(index, GuestRegisterKind::Cpu)
+    }
+    // pub fn cop0(index: usize) -> Self {
+    //     Self::new(index, GuestRegisterKind::Cop0)
+    // }
+    pub fn tmp(id: usize) -> Self {
+        Self::new(id, GuestRegisterKind::Temporary)
+    }
+
+    pub fn kind(&self) -> GuestRegisterKind {
+        unsafe { std::mem::transmute(self.0 >> 8) }
+    }
+
+    pub(crate) fn id(&self) -> usize {
+        (self.0 & 0xff00) as usize
+    }
+}
+
+#[derive(Debug, Clone)]
+struct HostRegister {
+    register: Register,
+    borrow_index: usize,
+    locked: bool,
+}
+
+impl Hash for HostRegister {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.register.hash(state);
+    }
+}
+
+// Register that should not be mapped
+fn is_reserved(register: &Register) -> bool {
+    match register {
+        Register::Rsi | Register::Rsp | Register::Rbp => true,
+        _ => false,
     }
 }
