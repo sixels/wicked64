@@ -86,18 +86,25 @@ fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
                     | (u8::from(#dst >= Register::R8) << 2)
                     | (u8::from(#src >= Register::R8) << 0);
 
-                let __mode__ = u8::from(#disp != 0) << 1;
                 let __s__ = (#src as u8) % 8;
                 let __d__ = (#dst as u8) % 8;
+
+                let __disp__ = if #neg { -(#disp as i32) } else { #disp as i32 };
+                let __mode__ = u8::from(__disp__ != 0 || __s__ == Register::Rbp as u8) << u8::from(__disp__.abs() > i8::MAX as _);
+
                 let __mod_rm__ = (__mode__ << 6) | (__d__ << 3) | (__s__ << 0);
 
                 buf.emit_raw(&[__base__, 0x8b, __mod_rm__]);
-                if #src == Register::Rsp {
+                if __s__ == Register::Rsp as u8 {
                     buf.emit_byte(0x24);
                 }
+
                 if __mode__ != 0 {
-                    let __disp__ = #disp as i32;
-                    buf.emit_dword(if #neg { -__disp__ } else { __disp__ } as u32 );
+                    if __disp__.abs() > i8::MAX as _ {
+                        buf.emit_dword(__disp__ as u32);
+                    } else {
+                        buf.emit_byte(__disp__ as i8 as u8);
+                    }
                 }
             }
         }
