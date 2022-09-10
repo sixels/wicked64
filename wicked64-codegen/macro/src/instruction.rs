@@ -61,7 +61,9 @@ impl Parse for Instruction {
                 ))
             }
         };
-        input.parse::<Token![;]>()?;
+        if !input.is_empty() {
+            input.parse::<Token![;]>()?;
+        }
         Ok(inst)
     }
 }
