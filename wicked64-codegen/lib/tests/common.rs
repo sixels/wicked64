@@ -8,5 +8,5 @@ pub fn registers() -> Vec<Register> {
 
 pub fn dump_file(name: &str) -> Vec<u8> {
     let path = format!("./tests/asm/{name}.bin");
-    std::fs::read(&path).expect(&format!("Could not find `{path}`"))
+    std::fs::read(&path).expect(&format!("Could not find `{path}`. Perhaps you forgot to run `just gen_asm` to generate all tests' dependencies. Alternatively, you can run `just dump_asm_test \"${name}\"` to generate only the dependency for the current test."))
 }
