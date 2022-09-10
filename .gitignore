@@ -1,5 +1,6 @@
 target
 .vscode/
 
+*.bin
 *.log
 assets/test-roms/**/*.z64

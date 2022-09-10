@@ -1,191 +1,77 @@
+use pretty_assertions::assert_eq;
+
 use w64_codegen::emit;
 use w64_codegen::register::Register;
 use w64_codegen::Emitter;
+
+fn registers() -> Vec<Register> {
+    (0..16u8)
+        .map(|n| unsafe { std::mem::transmute::<u8, Register>(n) })
+        .collect()
+}
+
+fn dump_file(name: &str) -> Vec<u8> {
+    let path = format!("./tests/asm/mov/{name}.bin");
+    std::fs::read(&path).expect(&format!("Could not find `{path}`"))
+}
 
 #[test]
 fn mov_reg_reg() {
     let mut emitter = Emitter::default();
 
-    let rax = Register::Rax;
-    let r9 = Register::R9;
+    let regs = registers();
+    for dst in regs.iter().copied() {
+        for src in regs.iter().copied() {
+            emit!(emitter, mov %dst, %src);
+        }
+    }
 
-    emit!(emitter,
-        mov rcx, r8;
-        mov r9, rax;
-        mov rcx, rbx;
-        mov r9, r11;
-        mov r9, %rax;
-        mov %r9, rax;
-        mov %r9, %rax;
-    );
-
-    assert_eq!(
-        emitter.as_slice(),
-        &[
-            0x4c, 0x89, 0xc1, // mov rcx, r8
-            0x49, 0x89, 0xc1, // mov r9,rax
-            0x48, 0x89, 0xd9, // mov rcx, rbx
-            0x4d, 0x89, 0xd9, // mov r9, r11
-            0x49, 0x89, 0xc1, // mov r9,rax
-            0x49, 0x89, 0xc1, // mov r9,rax
-            0x49, 0x89, 0xc1, // mov r9,rax
-        ],
-    );
+    assert_eq!(emitter.as_slice(), dump_file("mov_reg_reg"));
 }
 
 #[test]
 fn mov_reg_immediate() {
     let mut emitter = Emitter::default();
 
-    let val = 0x3412;
-    let r11 = Register::R11;
+    let byte = -0x12_i8;
+    let dword = 0xfeff26_u32;
+    let qword = -0xf4a2_i64;
 
-    emit!(emitter,
-        mov rcx, 0x3412;
-        mov rbx, 0x3412;
-        mov r9, 0x3412;
-        mov r11, 0x3412;
-        mov rax, 0x3412;
-        mov r8, 0x3412;
-        mov %r11, 0x3412;
-        mov r11, $val;
-        mov %r11, $val;
-    );
-
-    assert_eq!(
-        emitter.as_slice(),
-        &[
-            0xb9, 0x12, 0x34, 0x00, 0x00, // mov rcx, 0x3412
-            0xbb, 0x12, 0x34, 0x00, 0x00, // mov rbx, 0x3412
-            0x41, 0xb9, 0x12, 0x34, 0x00, 0x00, // mov r9, 0x3412
-            0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
-            0xb8, 0x12, 0x34, 0x00, 0x00, // mov rax, 0x3412
-            0x41, 0xb8, 0x12, 0x34, 0x00, 0x00, // mov r8, 0x3412
-            0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
-            0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
-            0x41, 0xbb, 0x12, 0x34, 0x00, 0x00, // mov r11, 0x3412
-        ]
-    );
+    for reg in registers() {
+        emit!(emitter,
+            mov %reg, $byte;
+            mov %reg, $dword;
+            movabs %reg, $qword;
+        );
+    }
+    assert_eq!(emitter.as_slice(), dump_file("mov_reg_imm"));
 }
 
 #[test]
 fn mov_reg_direct() {
     let mut emitter = Emitter::default();
 
-    let rcx = Register::Rcx;
-    let val = 0x78563412;
+    let addr = 0x78563412;
+    for reg in registers() {
+        emit!(emitter, mov %reg,[$addr]);
+    }
 
-    emit!(emitter,
-        mov rcx, [0x78563412];
-        mov rbx, [0x78563412];
-        mov r9, [0x78563412];
-        mov r11, [0x78563412];
-        mov rax, [0x78563412];
-        mov r8, [0x78563412];
-        mov %rcx, [0x78563412];
-        mov rcx, [$val];
-        mov %rcx, [$val];
-    );
-
-    assert_eq!(
-        emitter.as_slice(),
-        &[
-            0x48, 0x8b, 0x0c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov rcx, [0x78563412];
-            0x48, 0x8b, 0x1c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov rbx, [0x78563412];
-            0x4c, 0x8b, 0x0c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov r9, [0x78563412];
-            0x4c, 0x8b, 0x1c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov r11, [0x78563412];
-            0x48, 0x8b, 0x04, 0x25, 0x12, 0x34, 0x56, 0x78, // mov rax, [0x78563412];
-            0x4c, 0x8b, 0x04, 0x25, 0x12, 0x34, 0x56, 0x78, // mov r8, [0x78563412];
-            0x48, 0x8b, 0x0c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov rcx, [0x78563412];
-            0x48, 0x8b, 0x0c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov rcx, [0x78563412];
-            0x48, 0x8b, 0x0c, 0x25, 0x12, 0x34, 0x56, 0x78, // mov rcx, [0x78563412];
-        ]
-    );
+    assert_eq!(emitter.as_slice(), dump_file("mov_reg_direct"));
 }
 
 #[test]
-fn mod_reg_indirect() {
+fn mov_reg_indirect() {
     let mut emitter = Emitter::default();
 
-    let r9 = Register::R9;
-    let rax = Register::Rax;
+    let disp = 0x123456;
+    let regs = registers();
+    for dst in regs.iter().copied() {
+        for src in regs.iter().copied() {
+            emit!(emitter, mov %dst, [%src]);
+            emit!(emitter, mov %dst, [%src + $disp]);
+            emit!(emitter, mov %dst, [%src - $disp]);
+        }
+    }
 
-    emit!(emitter,
-        mov rcx, [r8];
-        mov r9, [rax];
-        mov rcx, [rbx];
-        mov r9, [r11];
-        mov rax, [r9];
-        mov %r9, [rax];
-        mov r9, [%rax];
-        mov %r9, [%rax];
-    );
-
-    assert_eq!(
-        emitter.as_slice(),
-        &[
-            0x49, 0x8b, 0x08, // mov rcx, [r8]
-            0x4c, 0x8b, 0x08, // mov r9, [rax]
-            0x48, 0x8b, 0x0b, // mov rcx, [rbx]
-            0x4d, 0x8b, 0x0b, // mov r9, [r11]
-            0x49, 0x8b, 0x01, // mov rax, [r9]
-            0x4c, 0x8b, 0x08, // mov r9, [rax]
-            0x4c, 0x8b, 0x08, // mov r9, [rax]
-            0x4c, 0x8b, 0x08, // mov r9, [rax]
-        ]
-    )
-}
-
-#[test]
-fn mod_reg_indirect_displacement() {
-    let mut emitter = Emitter::default();
-
-    let rcx = Register::Rcx;
-    let rbx = Register::Rbx;
-    let rsp = Register::Rsp;
-    let val = 0x78563412;
-
-    emit!(emitter,
-        mov rcx, [r8 + 0x78563412];
-        mov r9, [rax + 0x78563412];
-        mov rcx, [rbx + 0x78563412];
-        mov r9, [r11 + 0x78563412];
-        mov rax, [%rsp + 0x78563412];
-        mov rax, [rsi + 0x78563412];
-
-        mov %rcx, [rbx + 0x78563412];
-        mov rcx, [%rbx + 0x78563412];
-        mov rcx, [rbx + $val];
-
-        mov %rcx, [%rbx + 0x78563412];
-        mov %rcx, [rbx + $val];
-        mov rcx, [%rbx + $val];
-
-        mov %rcx, [%rbx + $val];
-    );
-
-    assert_eq!(
-        emitter.as_slice(),
-        &[
-            0x49, 0x8b, 0x88, 0x12, 0x34, 0x56, 0x78, // mov rcx, [r8 + 0x78563412]
-            0x4c, 0x8b, 0x88, 0x12, 0x34, 0x56, 0x78, // mov r9, [rax + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x4d, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov r9, [r11 + 0x78563412]
-            0x48, 0x8b, 0x84, 0x24, 0x12, 0x34, 0x56, 0x78, // mov rax, [rsp + 0x78563412]
-            0x48, 0x8b, 0x86, 0x12, 0x34, 0x56, 0x78, // mov rax, [rsi + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-            0x48, 0x8b, 0x8b, 0x12, 0x34, 0x56, 0x78, // mov rcx, [rbx + 0x78563412]
-        ]
-    );
-}
-
-#[test]
-#[ignore = "TODO: Write some tests"]
-fn movabs() {
-    todo!()
+    assert_eq!(emitter.as_slice(), dump_file("mov_reg_indirect"));
 }
