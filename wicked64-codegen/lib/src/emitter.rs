@@ -1,47 +1,17 @@
-use crate::{self as w64_codegen, register::CALLEE_SAVED_REGISTERS};
-
-use crate::emit;
 use byteorder::{LittleEndian, WriteBytesExt};
+use w64_codegen_types::encoding::{ModRM, Rex};
 
 pub struct Emitter {
     buffer: Vec<u8>,
 }
 
 impl Emitter {
-    pub fn new() -> Self {
-        let mut emitter = Self::default();
-
-        emit!(emitter,
-            push rax;
-        );
-        for reg in CALLEE_SAVED_REGISTERS {
-            emit!(emitter,
-                push %reg;
-            );
-        }
-
-        emitter
+    pub fn new() -> Emitter {
+        Default::default()
     }
 
     pub fn as_slice(&self) -> &[u8] {
         &self.buffer
-    }
-
-    pub fn finalize(self) -> region::Result<ExecBuffer> {
-        let mut emitter = self;
-
-        // retrieve callee-saved registers
-        for reg in CALLEE_SAVED_REGISTERS.iter().copied().rev() {
-            emit!(emitter,
-                pop %reg;
-            );
-        }
-        emit!(emitter,
-            pop rcx;
-            ret;
-        );
-
-        unsafe { emitter.make_exec() }
     }
 
     pub unsafe fn make_exec(self) -> region::Result<ExecBuffer> {
@@ -62,6 +32,42 @@ impl Emitter {
     }
     pub fn emit_qword(&mut self, qword: u64) {
         self.buffer.write_u64::<LittleEndian>(qword).unwrap();
+    }
+
+    pub fn encode_instruction(
+        &mut self,
+        rex: Option<Rex>,
+        opcode: u8,
+        mod_rm: Option<ModRM>,
+        sib: Option<u8>,
+        disp: Option<i32>,
+        imm: Option<u32>,
+    ) {
+        if let Some(rex) = rex {
+            self.emit_byte(rex.value());
+        }
+
+        self.emit_byte(opcode);
+
+        if let Some(mod_rm) = mod_rm {
+            self.emit_byte(mod_rm.value());
+        }
+
+        if let Some(sib) = sib {
+            self.emit_byte(sib);
+        }
+
+        if let Some(disp) = disp {
+            if disp.abs() > i8::MAX as i32 {
+                self.emit_dword(disp as u32);
+            } else {
+                self.emit_byte(disp as u8);
+            }
+        }
+
+        if let Some(imm) = imm {
+            self.emit_dword(imm);
+        }
     }
 }
 
