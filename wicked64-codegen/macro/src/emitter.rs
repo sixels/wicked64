@@ -1,5 +1,5 @@
 use proc_macro2::{Punct, Spacing, TokenStream};
-use quote::{quote, TokenStreamExt};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{token::Paren, Ident};
 use w64_codegen_types::register::Register;
 
@@ -15,6 +15,15 @@ enum Operation {
     Add = 0,
     Or = 1,
     Sub = 5,
+}
+
+impl ToTokens for Operation {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match *self {
+            Operation::Add => 0u8.to_tokens(tokens),
+            a => (a as u8).to_tokens(tokens),
+        }
+    }
 }
 
 pub fn emit(instruction: Instruction) -> TokenStream {
@@ -34,107 +43,61 @@ pub fn emit(instruction: Instruction) -> TokenStream {
     }
 }
 
-fn emit_mov(dst: AddressingMode, src: AddressingMode) -> TokenStream {
-    match (dst, src) {
+fn emit_mov(addr_dst: AddressingMode, addr_src: AddressingMode) -> TokenStream {
+    match (addr_dst.clone(), addr_src.clone()) {
         (AddressingMode::Immediate(_), _) => panic!("Invalid mov destination"),
         (AddressingMode::Register(dst), AddressingMode::Register(src)) => {
             quote! {
-                let __base__ = (0b1001 << 3)
-                    | (u8::from(#src >= Register::R8) << 2)
-                    | (u8::from(#dst >= Register::R8) << 0);
-
-                let __s__ = (#src as u8) % 8;
-                let __d__ = (#dst as u8) % 8;
-                let __mod_rm__ = (0b11 << 6) | (__s__ << 3) | (__d__ << 0);
-
-                buf.emit_raw(&[__base__, 0x89, __mod_rm__]);
+                let __rex__ = Rex(true, #src >= Register::R8, false, #dst >= Register::R8);
+                let __mod_rm__ = ModRM(0b11, #src.value(), #dst.value());
+                buf.encode_instruction(Some(__rex__), 0x89, Some(__mod_rm__), None, None, None);
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Immediate(imm)) => {
             quote! {
-                let __d__ = (#dst as u8) % 8;
-                let __base__ = __d__ + 0xb8;
-
-                if #dst >= Register::R8 {
-                    buf.emit_byte(0x41);
-                }
-                buf.emit_byte(__base__);
-                buf.emit_dword(#imm as i32 as u32);
+                let __rex__ = if #dst >= Register::R8 { Some(Rex(false,false,false,true)) } else { None };
+                buf.encode_instruction(__rex__, 0xb8 | #dst.value(), None, None, None, Some(#imm as i32 as u32));
             }
         }
         (AddressingMode::Register(dst), AddressingMode::Direct(addr)) => {
             quote! {
-                let __base__ = (0b1001 << 3) | (u8::from(#dst >= Register::R8) << 2);
-
-                let __d__ = (#dst as u8) % 8;
-                let __mod_rm__ = (0b00 << 6) | (__d__ << 3) | (0b100 << 0);
-
-                buf.emit_raw(&[__base__, 0x8b, __mod_rm__, 0x25]);
-                buf.emit_dword(#addr as i32 as u32);
-            }
-        }
-        (AddressingMode::Register(dst), AddressingMode::Indirect(src)) => {
-            let AddrIndirect { reg: src, disp } = src;
-
-            let (neg, disp) = match disp {
-                Some((neg, disp)) => (neg, disp),
-                None => (false, AddrImmediate::Lit(0)),
-            };
-
-            quote! {
-                let __base__ = (0b1001 << 3)
-                    | (u8::from(#dst >= Register::R8) << 2)
-                    | (u8::from(#src >= Register::R8) << 0);
-
-                let __s__ = (#src as u8) % 8;
-                let __d__ = (#dst as u8) % 8;
-
-                let __disp__ = if #neg { -(#disp as i32) } else { #disp as i32 };
-                let __mode__ = u8::from(__disp__ != 0 || __s__ == Register::Rbp as u8) << u8::from(__disp__.abs() > i8::MAX as _);
-
-                let __mod_rm__ = (__mode__ << 6) | (__d__ << 3) | (__s__ << 0);
-
-                buf.emit_raw(&[__base__, 0x8b, __mod_rm__]);
-                if __s__ == Register::Rsp as u8 {
-                    buf.emit_byte(0x24);
-                }
-
-                if __mode__ != 0 {
-                    if __disp__.abs() > i8::MAX as _ {
-                        buf.emit_dword(__disp__ as u32);
-                    } else {
-                        buf.emit_byte(__disp__ as i8 as u8);
-                    }
-                }
+                let __rex__ = Rex(true, #dst >= Register::R8, false, false);
+                let __mod_rm__ = ModRM(0b00, #dst.value(), 0b100);
+                buf.encode_instruction(Some(__rex__), 0x8b, Some(__mod_rm__), Some(0x25u8), None, Some(#addr as i32 as u32));
             }
         }
         (
-            AddressingMode::Indirect(AddrIndirect { reg: dst, disp }),
-            AddressingMode::Register(src),
+            AddressingMode::Register(dst),
+            AddressingMode::Indirect(AddrIndirect { reg: src, disp }),
+        )
+        | (
+            AddressingMode::Indirect(AddrIndirect { reg: src, disp }),
+            AddressingMode::Register(dst),
         ) => {
+            let opcode = if let AddressingMode::Indirect(_) = addr_dst {
+                0x89u8
+            } else {
+                0x8bu8
+            };
+
             let (neg, disp) = match disp {
                 Some((neg, disp)) => (neg, disp),
                 None => (false, AddrImmediate::Lit(0)),
             };
 
             quote! {
-                let __base__ = (0b1001 << 3)
-                    | (u8::from(#src >= Register::R8) << 2)
-                    | (u8::from(#dst >= Register::R8) << 0);
+                let __rex__ = Rex(true, #dst >= Register::R8, false, #src >= Register::R8);
 
-                let __mode__ = u8::from(#disp != 0) << 1;
-                let __s__ = (#src as u8) % 8;
-                let __d__ = (#dst as u8) % 8;
-                let __mod_rm__ = (__mode__ << 6) | (__s__ << 3) | (__d__ << 0);
+                let __disp__ = if #neg { -(#disp as i32) } else { #disp as i32 };
 
-                buf.emit_raw(&[__base__, 0x89, __mod_rm__]);
-                if #dst == Register::Rsp {
-                    buf.emit_byte(0x24);
-                }
-                if __mode__ != 0 {
-                    let __disp__ = #disp as i32;
-                    buf.emit_dword(if #neg { -__disp__ } else { __disp__ } as u32 );
-                }
+                let __mod__ = u8::from(__disp__ != 0 || #src.value() == Register::Rbp.value()) << u8::from(__disp__.abs() > i8::MAX as _);
+                let __mod_rm__ = ModRM(__mod__, #dst.value(), #src.value());
+
+                let __sib__ = (#src.value() == Register::Rsp.value()).then(|| 0x24);
+
+                let __disp__ = (__mod__ != 0).then(|| __disp__);
+
+                buf.encode_instruction(Some(__rex__), #opcode, Some(__mod_rm__), __sib__, __disp__, None);
             }
         }
         (a, b) => todo!("mov {a}, {b}"),
@@ -146,10 +109,9 @@ fn emit_movabs(dst: AddressingMode, src: AddrImmediate) -> TokenStream {
         AddressingMode::Immediate(_) => panic!("Invalid movabs destination"),
         AddressingMode::Register(AddrRegister::Var(dst)) => {
             quote! {
-                let __base__ = if #dst >= Register::R8 { 0x49 } else { 0x48 };
-                let __d__ = #dst as u8 % 8;
+                let __rex__ = if #dst >= Register::R8 { 0x49 } else { 0x48 };
 
-                buf.emit_raw(&[__base__, 0xb8 + __d__]);
+                buf.emit_raw(&[__rex__, 0xb8 + #dst.value()]);
                 buf.emit_qword(#src as u64);
             }
         }
@@ -180,32 +142,26 @@ fn emit_pop(reg: AddrRegister) -> TokenStream {
     }
 }
 
-// TODO: ADD TESTS
 fn emit_op(op: Operation, dst: AddrRegister, src: AddressingMode) -> TokenStream {
-    let id = op as u8;
-
-    let mut ts = quote! {
-        let __base__ = 0x48 | u8::from(#dst >= Register::R8);
-        buf.emit_byte(__base__);
-    };
+    let mut ts = quote! {};
 
     ts.extend(match src {
         AddressingMode::Immediate(imm) => {
             quote! {
-                if #dst == Register::Rax {
-                    buf.emit_byte((#id << 3) | 0b101);
+                let __rex__ = Rex(true, false, false, #dst >= Register::R8);
+                let (__opcode__, __mod_rm__) = if #dst == Register::Rax {
+                    ((#op << 3) | 0b101, None)
                 } else {
-                    buf.emit_byte(0x81);
-                }
-                buf.emit_dword(#imm as u32);
+                   (0x81, Some(ModRM(0b11, #op, #dst.value())))
+                };
+                buf.encode_instruction(Some(__rex__), __opcode__, __mod_rm__, None, None, Some(#imm as i32 as u32));
             }
         }
         AddressingMode::Register(src) => {
             quote! {
-                buf.emit_raw(&[
-                    (#id << 3) | 0b001,
-                    (0b11 << 6) | ((#src as u8) << 3) | ((#dst as u8) << 0)
-                ]);
+                let __rex__ = Rex(true, #src >= Register::R8, false, #dst >= Register::R8);
+                let __mod_rm__ = ModRM(0b11, #src.value(), #dst.value());
+                buf.encode_instruction(Some(__rex__), (#op << 3) | 0b001, Some(__mod_rm__), None, None, None);
             }
         }
 
