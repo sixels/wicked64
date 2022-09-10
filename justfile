@@ -12,4 +12,4 @@ gen_asm:
 @dump_asm_test NAME:
     mkdir -p "/tmp/w64-codegen/$(dirname {{NAME}})"
     nasm -O0 -felf64 {{asm_dir / NAME + ".s"}} -o {{"/tmp/w64-codegen" / NAME + ".o"}}
-    objcopy --output-target="binary" --only-section=".text" {{"/tmp" / NAME + ".o"}} {{ asm_dir / NAME + ".bin" }}
+    objcopy --output-target="binary" --only-section=".text" {{"/tmp/w64-codegen" / NAME + ".o"}} {{ asm_dir / NAME + ".bin" }}
