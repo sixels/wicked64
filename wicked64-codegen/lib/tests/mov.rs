@@ -1,19 +1,12 @@
 use pretty_assertions::assert_eq;
 
 use w64_codegen::emit;
-use w64_codegen::register::Register;
 use w64_codegen::Emitter;
 
-fn registers() -> Vec<Register> {
-    (0..16u8)
-        .map(|n| unsafe { std::mem::transmute::<u8, Register>(n) })
-        .collect()
-}
+#[path = "./common.rs"]
+mod common;
 
-fn dump_file(name: &str) -> Vec<u8> {
-    let path = format!("./tests/asm/mov/{name}.bin");
-    std::fs::read(&path).expect(&format!("Could not find `{path}`"))
-}
+use common::{dump_file, registers};
 
 #[test]
 fn mov_reg_reg() {
@@ -26,11 +19,11 @@ fn mov_reg_reg() {
         }
     }
 
-    assert_eq!(emitter.as_slice(), dump_file("mov_reg_reg"));
+    assert_eq!(emitter.as_slice(), dump_file("mov/mov_reg_reg"));
 }
 
 #[test]
-fn mov_reg_immediate() {
+fn mov_reg_imm() {
     let mut emitter = Emitter::default();
 
     let byte = -0x12_i8;
@@ -44,11 +37,11 @@ fn mov_reg_immediate() {
             movabs %reg, $qword;
         );
     }
-    assert_eq!(emitter.as_slice(), dump_file("mov_reg_imm"));
+    assert_eq!(emitter.as_slice(), dump_file("mov/mov_reg_imm"));
 }
 
 #[test]
-fn mov_reg_direct() {
+fn mov_reg_dir() {
     let mut emitter = Emitter::default();
 
     let addr = 0x78563412;
@@ -56,11 +49,11 @@ fn mov_reg_direct() {
         emit!(emitter, mov %reg,[$addr]);
     }
 
-    assert_eq!(emitter.as_slice(), dump_file("mov_reg_direct"));
+    assert_eq!(emitter.as_slice(), dump_file("mov/mov_reg_dir"));
 }
 
 #[test]
-fn mov_reg_indirect() {
+fn mov_reg_ind() {
     let mut emitter = Emitter::default();
 
     let disp = 0x123456;
@@ -72,6 +65,21 @@ fn mov_reg_indirect() {
             emit!(emitter, mov %dst, [%src - $disp]);
         }
     }
+    assert_eq!(emitter.as_slice(), dump_file("mov/mov_reg_ind"));
+}
 
-    assert_eq!(emitter.as_slice(), dump_file("mov_reg_indirect"));
+#[test]
+fn mov_ind_reg() {
+    let mut emitter = Emitter::default();
+    let disp32 = 0x123456;
+    let disp8 = 0x70;
+    let regs = registers();
+    for dst in regs.iter().copied() {
+        for src in regs.iter().copied() {
+            emit!(emitter, mov [%dst], %src);
+            emit!(emitter, mov [%dst + $disp32], %src);
+            emit!(emitter, mov [%dst - $disp8], %src);
+        }
+    }
+    assert_eq!(emitter.as_slice(), dump_file("mov/mov_ind_reg"));
 }
