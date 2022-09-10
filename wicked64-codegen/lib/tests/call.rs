@@ -5,7 +5,6 @@ use w64_codegen::Emitter;
 fn call_zero() {
     static mut STATUS: Option<String> = None;
 
-    // let mut emitter = Emitter::new();
     let mut emitter = Emitter::default();
 
     fn foo() {
@@ -19,7 +18,6 @@ fn call_zero() {
         ret;
     );
 
-    // let code = emitter.finalize().unwrap();
     let code = unsafe { emitter.make_exec() }.unwrap();
 
     code.execute();
@@ -53,6 +51,7 @@ fn call_many() {
     let mut emitter = Emitter::default();
 
     emit!(emitter,
+        // rsi is callee-saved, we need to save its value before using it
         push rsi;
         mov rsi, $pa;
         call_fn primitives(rsi, $pb);
