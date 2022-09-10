@@ -22,7 +22,10 @@ pub enum Register {
 }
 
 impl Register {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn value(&self) -> u8 {
+        *self as u8 % 8
+    }
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Register::Rax => "rax",
             Register::Rcx => "rcx",
