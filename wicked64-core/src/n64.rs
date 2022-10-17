@@ -46,12 +46,13 @@ impl<O: ByteOrder> N64<O> {
             cpu.translate_virtual(cpu.pc as usize)
         };
 
-        let state = self.state.clone();
-        let code = self.cache.get_or_compile(phys_pc, state);
-
-        tracing::info!("Running generated code");
+        let code = self.cache.get_or_compile(phys_pc, &self.state);
         code.execute();
-        tracing::info!("Ok");
+
+        {
+            let cpu = &self.state.borrow().cpu;
+            println!("{:02x?}", cpu.gpr);
+        }
     }
 }
 
@@ -81,10 +82,13 @@ mod tests {
         crate::tests::init_trace();
 
         let mut n64 = N64::<BigEndian>::new("../assets/test-roms/dillonb/basic.z64").unwrap();
+
         skip_boot_process(&n64);
         tracing::info!("Beginning the execution");
 
+        loop {
         n64.step();
+        }
     }
 
     fn skip_boot_process<O: ByteOrder>(n64: &N64<O>) {
