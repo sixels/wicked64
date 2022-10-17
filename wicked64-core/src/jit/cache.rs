@@ -52,19 +52,6 @@ impl Cache {
         });
         block
     }
-
-    // fn insert_range(&mut self, start: usize, end: usize) {
-    //     self.compiled_addrs.insert(start, CacheRange::Start);
-    //     self.compiled_addrs.insert(end, CacheRange::End);
-    // }
-
-    // /// Check if an arbitrary address is cached
-    // pub fn is_addr_compiled(&self, addr: usize) -> bool {
-    //     match self.compiled_addrs.range(..=addr).last() {
-    //         Some((_, CacheRange::Start)) => true,
-    //         _ => false,
-    //     }
-    // }
 }
 
 impl Default for Cache {
