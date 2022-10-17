@@ -1,32 +1,20 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use hashbrown::HashMap;
-
-use crate::n64::State;
+use crate::{n64::State, utils::btree_range::BTreeRange};
 
 use super::{compiler::ExecBuffer, JitEngine};
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum CacheRange {
-    Start,
-    End,
-}
 
 #[derive(Clone)]
 pub struct CompiledBlock {
     state: Rc<RefCell<State>>,
-    exec_buf: Rc<ExecBuffer>,
-    start: usize,
-    len: usize,
+    exec_buf: ExecBuffer,
 }
 
 impl CompiledBlock {
-    pub fn new(state: Rc<RefCell<State>>, buf: ExecBuffer, start: usize, len: usize) -> Self {
+    pub fn new(state: Rc<RefCell<State>>, buf: ExecBuffer) -> Self {
         Self {
             state,
-            exec_buf: Rc::new(buf),
-            start,
-            len,
+            exec_buf: buf,
         }
     }
 
@@ -39,38 +27,32 @@ impl CompiledBlock {
 
 pub struct Cache {
     jit: JitEngine,
-    blocks: hashbrown::HashMap<usize, CompiledBlock>,
-    compiled_addrs: BTreeMap<usize, CacheRange>,
+    blocks: BTreeRange<Rc<CompiledBlock>>,
 }
 
 impl Cache {
     /// Get a compiled block from the cache or create if no entries were found
-    pub fn get_or_compile(&mut self, addr: usize, state: &Rc<RefCell<State>>) -> CompiledBlock {
-        let block = self
-            .blocks
-            .entry(addr)
-            .or_insert_with({
-                let state = state.clone();
-                || {
-                    tracing::debug!("Generating cache for address '0x{addr:08x}'");
+    pub fn get_or_compile(&mut self, addr: usize, state: &Rc<RefCell<State>>) -> Rc<CompiledBlock> {
+        if let Some(block) = self.blocks.get_exact(addr) {
+            return block.clone();
+        }
 
-                    let cycles = 1024;
+        // .or_insert_with({
+        let (block, len) = {
+            let state = state.clone();
+            tracing::debug!("Generating cache for address '0x{addr:08x}'");
 
-                    let (buf, len) = self.jit.compile_block(state.clone(), cycles);
-                    // self.insert_range(addr, addr + len);
-                    self.compiled_addrs.insert(addr, CacheRange::Start);
-                    self.compiled_addrs.insert(addr + len, CacheRange::End);
+            let cycles = 1024;
 
-                    tracing::debug!("Generated code: {:02x?}", buf.as_slice());
-                    CompiledBlock::new(state, buf, addr, len)
-                }
-            })
-            .clone();
+            let (buf, len) = self.jit.compile_block(state.clone(), cycles);
+
+            tracing::debug!("Generated code: {:02x?}", buf.as_slice());
+            (Rc::new(CompiledBlock::new(state, buf)), len)
+        };
+        self.blocks.insert(addr..=addr + len, block.clone());
 
         if let Some(invalidated_range) = state.borrow_mut().cache_invalidation.take() {
-            self.blocks.retain(|_, block| {
-                let start = block.start;
-                let end = start + block.len;
+            self.blocks.retain(|(start, end), _| {
                 !(invalidated_range.0 <= end && invalidated_range.1 >= start)
             });
         }
@@ -84,8 +66,7 @@ impl Default for Cache {
     fn default() -> Cache {
         Self {
             jit: JitEngine::new(),
-            blocks: HashMap::default(),
-            compiled_addrs: BTreeMap::default(),
+            blocks: BTreeRange::new(),
         }
     }
 }
