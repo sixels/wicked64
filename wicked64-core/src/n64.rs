@@ -60,11 +60,16 @@ impl<O: ByteOrder> N64<O> {
 pub struct State {
     pub mmu: MemoryManager,
     pub cpu: Cpu<BigEndian>,
+    pub cache_invalidation: Option<(usize, usize)>,
 }
 
 impl State {
     pub fn new(mmu: MemoryManager, cpu: Cpu<BigEndian>) -> Self {
-        Self { mmu, cpu }
+        Self {
+            mmu,
+            cpu,
+            cache_invalidation: None,
+        }
     }
 }
 
@@ -87,7 +92,7 @@ mod tests {
         tracing::info!("Beginning the execution");
 
         loop {
-        n64.step();
+            n64.step();
         }
     }
 
