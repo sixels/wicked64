@@ -2,10 +2,7 @@ pub mod map;
 pub mod memory;
 pub mod num;
 
-use std::{
-    fmt::Debug,
-    ops::{Deref, DerefMut},
-};
+use std::fmt::Debug;
 
 use byteorder::ByteOrder;
 use enum_dispatch::enum_dispatch;
@@ -71,9 +68,10 @@ impl MemoryUnit for Box<[u8]> {
     }
 
     fn buffer(&self) -> &[u8] {
-        self.deref()
+        &**self
     }
+
     fn buffer_mut(&mut self) -> &mut [u8] {
-        self.deref_mut()
+        &mut **self
     }
 }

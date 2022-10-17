@@ -26,6 +26,12 @@ pub struct Cartridge {
 
 impl Cartridge {
     /// Create a new Cartridge from the given rom file
+    ///
+    /// # Errors
+    /// IO errors
+    ///
+    /// # Panics
+    /// Game content exceeds the maximum size
     pub fn open<P: AsRef<Path>>(rom_path: P) -> anyhow::Result<Cartridge> {
         let content = std::fs::read(rom_path)?;
 
@@ -40,6 +46,11 @@ impl Cartridge {
         Ok(Self { data })
     }
 
+    /// Get the endianness from the ROM header
+    ///
+    /// # Errors
+    /// Invalid ROM header
+    #[allow(clippy::result_unit_err)]
     pub fn endianness(&self) -> Result<CartridgeEndianness, ()> {
         match self.data[0] {
             0x80 => Ok(CartridgeEndianness::Big),

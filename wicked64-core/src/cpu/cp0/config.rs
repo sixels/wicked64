@@ -45,6 +45,10 @@ impl ConfigRegister {
     /// | 0b111 | 1.5:1 |
     /// | 0b000 | 2:1   |
     /// | 0b001 | 3:1   |
+    ///
+    /// # Panics
+    /// Invalid clock ratio
+
     pub fn get_clock_ratio(&self) -> f32 {
         let bits = self.get_bits(Self::BIT_EC_RANGE);
 

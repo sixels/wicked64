@@ -8,11 +8,16 @@ use crate::{cpu::Cpu, io::Cartridge, jit::cache::Cache, mmu::MemoryManager};
 pub struct N64<O: ByteOrder> {
     state: Rc<RefCell<State>>,
     cache: Cache,
+    #[allow(unused)]
     clocks: usize,
     _marker: PhantomData<O>,
 }
 
 impl<O: ByteOrder> N64<O> {
+    /// Create a new N64 virtual machine
+    ///
+    /// # Errors
+    /// Any
     pub fn new<P: AsRef<Path>>(rom_path: P) -> anyhow::Result<Self> {
         tracing::info!("Creating a brand new N64!");
 
@@ -26,7 +31,7 @@ impl<O: ByteOrder> N64<O> {
             state,
             clocks: 0,
             cache,
-            _marker: Default::default(),
+            _marker: PhantomData::default(),
         })
     }
 
@@ -89,10 +94,10 @@ mod tests {
 
         let cart_rom_addr = *addr_map::phys::CART_D1A2_RANGE.start();
         let header_pc = state.mmu.read::<u32, O>(0x08 + cart_rom_addr);
-        assert!(header_pc == 0x80001000);
+        assert!(header_pc == 0x8000_1000);
 
         state.cpu.pc = header_pc as u64;
 
-        state.mmu.copy_from(0x00001000, 0x10001000, 0x100000);
+        state.mmu.copy_from(0x0000_1000, 0x1000_1000, 0x10_0000);
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::unusual_byte_groupings, clippy::upper_case_acronyms)]
+
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 /// Each CPU instruction consists of a single 32-bit word, aligned on a word
@@ -171,12 +173,11 @@ impl Instruction {
             },
         };
 
-        decoded.ok_or(anyhow::anyhow!(
-            "Unknown COP0 instruction: 0x{instruction:08x}"
-        ))
+        decoded.ok_or_else(|| anyhow::anyhow!("Unknown COP0 instruction: 0x{instruction:08x}"))
     }
 
     pub fn cycles(&self) -> usize {
+        #[allow(clippy::match_single_binding)]
         match self {
             _ => 5,
         }
@@ -248,7 +249,7 @@ impl JumpType {
     fn new(instruction: u32) -> JumpType {
         Self {
             opcode: (instruction >> 26) as u8,
-            target: (instruction & 0x1ffffff) as u32,
+            target: (instruction & 0x1ff_ffff) as u32,
         }
     }
 }
@@ -278,7 +279,7 @@ impl RegisterType {
 }
 
 /// N64 opcodes
-/// Refer to https://www.zophar.net/fileuploads/2/10655uytsm/N64ops03.txt
+/// Refer to <https://www.zophar.net/fileuploads/2/10655uytsm/N64ops03.txt>
 #[repr(u8)]
 #[rustfmt::skip]
 #[allow(dead_code, non_camel_case_types)]

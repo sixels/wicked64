@@ -62,7 +62,7 @@ impl MemoryUnit for MemoryManager {
         {
             let src = unsafe { std::slice::from_raw_parts(src, n) };
             let dst = unsafe { std::slice::from_raw_parts(dst, n) };
-            assert!(&src[..n] == &dst[..n]);
+            assert!(src[..n] == dst[..n]);
         }
     }
 
@@ -72,18 +72,12 @@ impl MemoryUnit for MemoryManager {
         I: MemInteger + Sized + Debug,
         O: ByteOrder + Sized,
     {
-        match self.units.get_offset_value(addr) {
-            Some((offset, unit)) => {
-                let value = unit.read::<I, O>(offset);
-                value
-            }
-            None => {
-                tracing::warn!(
-                    "No modules are handling memory address 0x{addr:08x}. This might led to UB"
-                );
-                I::default()
-            }
+        if let Some((offset, unit)) = self.units.get_offset_value(addr) {
+            let value = unit.read::<I, O>(offset);
+            return value;
         }
+        tracing::warn!("No modules are handling memory address 0x{addr:08x}. This might led to UB");
+        I::default()
     }
 
     fn store<I, O>(&mut self, addr: usize, value: I)
