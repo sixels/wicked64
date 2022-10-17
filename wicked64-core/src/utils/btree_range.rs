@@ -51,27 +51,25 @@ impl<T> BTreeRange<T> {
         self.btree
             .range(..=index)
             .last()
-            .map(|(start, RangeItem { data, end })| {
+            .and_then(|(start, RangeItem { data, end })| {
                 if index < *end {
                     Some((index - *start, data))
                 } else {
                     None
                 }
             })
-            .flatten()
     }
     pub fn get_offset_value_mut(&mut self, index: usize) -> Option<(usize, &mut T)> {
         self.btree
             .range_mut(..=index)
             .last()
-            .map(|(start, RangeItem { data, end })| {
+            .and_then(|(start, RangeItem { data, end })| {
                 if index < *end {
                     Some((index - *start, data))
                 } else {
                     None
                 }
             })
-            .flatten()
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
