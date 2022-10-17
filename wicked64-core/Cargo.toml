@@ -6,11 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-w64-codegen = { path = "../wicked64-codegen/lib" }
 byteorder = "1.4.3"
 bitvec = "1.0.0"
 once_cell = "1.10.0"
 enum_dispatch = "0.3.8"
+iced-x86 = { version = "1.17.0", default-features = false, features = [
+    "std",
+    "encoder",
+    "code_asm",
+    "instr_info",
+    # For decoding/debugging
+    # "nasm",
+    # "op_code_info",
+    # "instr_info",
+] }
+region = "3.0.0"
 
 hashbrown = "0.12.0"
 num_enum = "0.5.7"
