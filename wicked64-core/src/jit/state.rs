@@ -6,18 +6,20 @@ use std::{
 
 use crate::n64::State;
 
-pub struct EmulatorState(Rc<RefCell<State>>);
+pub struct JitState {
+    vm: Rc<RefCell<State>>,
+}
 
-impl EmulatorState {
+impl JitState {
     pub fn new(state: Rc<RefCell<State>>) -> Self {
-        Self(state)
+        Self { vm: state }
     }
 
     pub fn offset_of<F, T>(&self, get_offset: F) -> usize
     where
         F: FnOnce(&State) -> &T,
     {
-        let state = self.0.borrow();
+        let state = self.vm.borrow();
 
         let data_addr = get_offset(&state) as *const T as usize;
         let state_addr = self.state_ptr() as usize;
@@ -27,20 +29,20 @@ impl EmulatorState {
     }
 
     pub fn state_ptr(&self) -> *const State {
-        &*self.0.borrow()
+        &*self.vm.borrow()
     }
 }
 
-impl Deref for EmulatorState {
+impl Deref for JitState {
     type Target = Rc<RefCell<State>>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.vm
     }
 }
 
-impl DerefMut for EmulatorState {
+impl DerefMut for JitState {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.vm
     }
 }
