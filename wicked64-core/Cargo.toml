@@ -27,6 +27,7 @@ num_enum = "0.5.7"
 
 anyhow = "1.0.56"
 tracing = { version = "0.1.33", default-features = false, features = ["std"] }
+thiserror = "1.0.37"
 
 [dev-dependencies]
 tracing-subscriber = "0.3.11"
