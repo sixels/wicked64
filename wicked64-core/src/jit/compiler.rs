@@ -171,7 +171,12 @@ impl Compiler {
             initial_pc,
             self.pc
         );
-        (compiled, (self.pc - self.state.borrow().cpu.pc) as usize)
+
+        // we can ensure that `len >= 0`, as we stop the compilation whenever an instruction changes the pc to
+        // an arbitrary value (i.e: a branch instruction)
+        let len = (self.pc - initial_pc) as usize;
+
+        (compiled, len)
     }
 
     fn compile_block(&mut self, cycles: usize) -> AssembleResult<usize> {
