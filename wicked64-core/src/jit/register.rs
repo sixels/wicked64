@@ -184,25 +184,21 @@ impl Registers {
     }
 }
 
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GuestRegister(u16);
-
-#[repr(u16)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum GuestRegisterKind {
+pub enum GuestRegister {
     /// CPU register
-    Cpu,
+    Cpu(u8),
+    Pc,
     // /// Coprocessor 0 register
     // Cop0,
 }
 
 impl GuestRegister {
-    pub fn new(index: usize, kind: GuestRegisterKind) -> Self {
-        Self(((kind as u16) << 8) | (index as u16))
+    pub fn cpu(index: u8) -> Self {
+        Self::Cpu(index as u8)
     }
-    pub fn cpu(index: usize) -> Self {
-        Self::new(index, GuestRegisterKind::Cpu)
+    pub fn pc() -> Self {
+        Self::Pc
     }
     // pub fn cop0(index: usize) -> Self {
     //     Self::new(index, GuestRegisterKind::Cop0)
@@ -210,14 +206,6 @@ impl GuestRegister {
     // pub fn tmp(id: usize) -> Self {
     //     Self::new(id, GuestRegisterKind::Temporary)
     // }
-
-    pub fn kind(self) -> GuestRegisterKind {
-        unsafe { std::mem::transmute(self.0 >> 8) }
-    }
-
-    pub(crate) fn id(self) -> usize {
-        (self.0 & 0xff) as usize
-    }
 }
 
 #[derive(Debug, Clone)]
