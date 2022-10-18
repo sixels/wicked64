@@ -31,6 +31,10 @@ impl JitState {
     pub fn state_ptr(&self) -> *const State {
         &*self.vm.borrow()
     }
+
+    pub fn into_inner(self) -> Rc<RefCell<State>> {
+        self.vm
+    }
 }
 
 impl Deref for JitState {

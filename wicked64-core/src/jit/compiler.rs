@@ -3,14 +3,13 @@ use std::rc::Rc;
 
 use iced_x86::code_asm::{self, AsmRegister64, CodeAssembler};
 
-use crate::cpu::instruction::{ImmediateType, Instruction};
+use crate::cpu::instruction::{ImmediateType, Instruction, JumpType};
 use crate::jit::{
     bridge,
-    register::{GuestRegisterKind, ARGS_REGS, CALLEE_SAVED_REGISTERS},
+    register::{GuestRegister, Registers, ARGS_REGS, CALLEE_SAVED_REGISTERS},
 };
 use crate::n64::State;
 
-use super::register::{GuestRegister, Registers};
 use super::state::JitState;
 
 const SCRATCHY_REGISTERS: [AsmRegister64; 2] = [code_asm::r14, code_asm::r15];
@@ -19,6 +18,7 @@ const SCRATCHY_REGISTERS: [AsmRegister64; 2] = [code_asm::r14, code_asm::r15];
 enum AssembleStatus {
     Continue,
     InvalidateCache,
+    Branch,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -83,18 +83,24 @@ macro_rules! wrap_call {
 pub struct ExecBuffer {
     ptr: *const u8,
     buf: Vec<u8>,
+    state: Rc<RefCell<State>>,
 }
 
 impl ExecBuffer {
-    unsafe fn new(buffer: Vec<u8>) -> region::Result<Self> {
+    unsafe fn new(buffer: Vec<u8>, state: Rc<RefCell<State>>) -> region::Result<Self> {
         let ptr = buffer.as_ptr();
 
         region::protect(ptr, buffer.len(), region::Protection::READ_WRITE_EXECUTE)?;
 
-        Ok(Self { buf: buffer, ptr })
+        Ok(Self {
+            buf: buffer,
+            ptr,
+            state,
+        })
     }
 
     pub fn execute(&self) {
+        let _state = self.state.borrow_mut();
         unsafe {
             let f: unsafe extern "C" fn() = std::mem::transmute(self.ptr);
             f();
@@ -106,9 +112,12 @@ impl ExecBuffer {
     }
 }
 
-fn assemble_code(mut emitter: CodeAssembler) -> Result<ExecBuffer, AssembleError> {
+fn assemble_code(
+    mut emitter: CodeAssembler,
+    state: Rc<RefCell<State>>,
+) -> Result<ExecBuffer, AssembleError> {
     let code = emitter.assemble(0)?;
-    let map = unsafe { ExecBuffer::new(code)? };
+    let map = unsafe { ExecBuffer::new(code, state)? };
     Ok(map)
 }
 
@@ -150,18 +159,14 @@ impl Compiler {
     /// Compile the code
     /// # Panics
     /// Panics if the generated assembly code is invalid
-
     pub fn compile(mut self, cycles: usize) -> (ExecBuffer, usize) {
         tracing::debug!("Generating compiled block");
 
-        // Initialize the code generation
         let initial_pc = self.state.borrow().cpu.pc;
-
-        // save the state address into `rsi` so we can easily access guest registers later
 
         let compiled_cycles = self.compile_block(cycles).unwrap();
 
-        let compiled = match assemble_code(self.emitter) {
+        let compiled = match assemble_code(self.emitter, self.state.into_inner()) {
             Ok(compiled) => compiled,
             Err(error) => panic!("Could not compile the code properly: {error:?}"),
         };
@@ -208,14 +213,18 @@ impl Compiler {
             };
 
             // early return
-            if self.compile_instruction(instruction).unwrap() != AssembleStatus::Continue {
-                let guest_pc_offset = self.state.offset_of(|state| &state.cpu.pc) as i32;
-                self.emitter.mov(code_asm::r14, self.pc)?;
-                self.emitter.mov(
-                    code_asm::ptr(code_asm::rsi + guest_pc_offset),
-                    code_asm::r14,
-                )?;
-                break;
+            match self.compile_instruction(instruction).unwrap() {
+                AssembleStatus::Continue => {}
+                AssembleStatus::InvalidateCache => {
+                    let guest_pc_offset = self.state.offset_of(|state| &state.cpu.pc) as i32;
+                    self.emitter.mov(code_asm::r14, self.pc)?;
+                    self.emitter.mov(
+                        code_asm::ptr(code_asm::rsi + guest_pc_offset),
+                        code_asm::r14,
+                    )?;
+                    break;
+                }
+                AssembleStatus::Branch => break,
             }
         }
 
@@ -234,7 +243,7 @@ impl Compiler {
         match instruction {
             Instruction::LUI(ImmediateType { rt, immediate, .. }) => {
                 // rt = immediate << 16
-                let host_rt = self.get_cpu_register(rt as usize);
+                let host_rt = self.get_cpu_register(rt);
                 let imm = (immediate as u64) << 16;
                 self.emitter.mov(host_rt, imm)?;
 
@@ -244,8 +253,8 @@ impl Compiler {
                 rs, rt, immediate, ..
             }) => {
                 // rt = rs | immediate
-                let host_rt = self.get_cpu_register(rt as usize);
-                let host_rs = self.get_cpu_register(rs as usize);
+                let host_rt = self.get_cpu_register(rt);
+                let host_rs = self.get_cpu_register(rs);
 
                 self.emitter.mov(host_rt, immediate as u64)?;
                 self.emitter.or(host_rt, host_rs)?;
@@ -260,8 +269,8 @@ impl Compiler {
             }) => {
                 // mmu[rs + offset] = rt
                 {
-                    let rs = self.get_cpu_register(rs as usize);
-                    let rt = self.get_cpu_register(rt as usize);
+                    let rs = self.get_cpu_register(rs);
+                    let rt = self.get_cpu_register(rt);
 
                     let state_addr = self.state.state_ptr();
 
@@ -273,6 +282,25 @@ impl Compiler {
 
                 // `mmu_store` might invalidate the current memory region
                 Ok(AssembleStatus::InvalidateCache)
+            }
+            Instruction::JAL(JumpType { target, .. }) => {
+                // r31 = pc + 8
+                // pc = (pc & 0xf000_0000) | (target << 2)
+                let guest_pc = self.get_cpu_pc();
+                let r31 = self.get_cpu_register(31);
+                self.emitter.mov(code_asm::r14, guest_pc)?;
+                self.emitter.mov(code_asm::r15d, target)?;
+
+                self.emitter.add(guest_pc, 8)?;
+                self.emitter.mov(r31, guest_pc)?;
+
+                self.emitter.shl(code_asm::r15d, 2)?;
+                self.emitter.and(code_asm::r14d, 0xf000_0000u32 as i32)?;
+                self.emitter.or(code_asm::r14d, code_asm::r15d)?;
+
+                self.emitter.mov(guest_pc, code_asm::r14)?;
+
+                Ok(AssembleStatus::Branch)
             }
             _ => todo!("Implement the rest of the instructions"),
         }
@@ -371,10 +399,21 @@ impl Compiler {
     }
 
     #[must_use]
-    fn get_cpu_register(&mut self, register: usize) -> AsmRegister64 {
+    fn get_cpu_register(&mut self, register: u8) -> AsmRegister64 {
         self.get_host_register(GuestRegister::cpu(register), |emitter, state, host_reg| {
             // load the register value
-            let reg_offset = state.offset_of(|state| &state.cpu.gpr[register]);
+            let reg_offset = state.offset_of(|state| &state.cpu.gpr[register as usize]);
+            emitter
+                .mov(host_reg, code_asm::ptr(code_asm::rsi + reg_offset))
+                .unwrap();
+        })
+    }
+
+    #[must_use]
+    fn get_cpu_pc(&mut self) -> AsmRegister64 {
+        self.get_host_register(GuestRegister::pc(), |emitter, state, host_reg| {
+            // load the register value
+            let reg_offset = state.offset_of(|state| &state.cpu.pc);
             emitter
                 .mov(host_reg, code_asm::ptr(code_asm::rsi + reg_offset))
                 .unwrap();
@@ -399,23 +438,12 @@ impl Compiler {
             }
 
             tracing::debug!(
-                "Allocated {reg:?} for {:?}#{}",
-                guest_reg.kind(),
-                guest_reg.id()
+                "Allocated {:?} for {guest_reg:?}",
+                iced_x86::Register::from(reg)
             );
 
             if let Some(dropped) = dropped {
-                let id = dropped.id();
-                let guest_offset = match dropped.kind() {
-                    GuestRegisterKind::Cpu => self.state.offset_of(|state| &state.cpu.gpr[id]),
-                    // GuestRegisterKind::Cop0 => {
-                    //     self.state.offset_of(|state| state.cpu.cp0.get_register(id))
-                    // }
-                } as i32;
-
-                self.emitter
-                    .mov(code_asm::ptr(code_asm::rsi + guest_offset), reg)
-                    .unwrap();
+                self.sync_guest_with(dropped, reg).unwrap();
             };
 
             initialize_with(&mut self.emitter, &self.state, reg);
@@ -426,14 +454,14 @@ impl Compiler {
     /// Sync all registers and return the temporary registers
     #[allow(unreachable_patterns)]
     fn sync_all_registers(&mut self) -> AssembleResult<()> {
-        for (guest, host) in
-            self.regs
-                .clone()
-                .iter()
-                .filter_map(|(guest, host)| match guest.kind() {
-                    GuestRegisterKind::Cpu => Some((*guest, *host)),
-                    _ => None,
-                })
+        for (guest, host) in self
+            .regs
+            .clone()
+            .iter()
+            .filter_map(|(guest, host)| match guest {
+                GuestRegister::Cpu(_) | GuestRegister::Pc => Some((*guest, *host)),
+                _ => None,
+            })
         {
             self.sync_guest_with(guest, host)?;
         }
@@ -446,9 +474,9 @@ impl Compiler {
         host_reg: AsmRegister64,
     ) -> AssembleResult<()> {
         let guest_offset = {
-            let id = guest_reg.id();
-            i32::try_from(match guest_reg.kind() {
-                GuestRegisterKind::Cpu => self.state.offset_of(|state| &state.cpu.gpr[id]),
+            i32::try_from(match guest_reg {
+                GuestRegister::Cpu(id) => self.state.offset_of(|state| &state.cpu.gpr[id as usize]),
+                GuestRegister::Pc => self.state.offset_of(|state| &state.cpu.pc),
             })
         }
         .unwrap();
