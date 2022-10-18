@@ -1,63 +1,62 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
-use crate::{n64::State, utils::btree_range::BTreeRange};
+use crate::utils::btree_range::BTreeRange;
 
-use super::{compiler::ExecBuffer, JitEngine};
+use super::compiler::ExecBuffer;
 
 #[derive(Clone)]
 pub struct CompiledBlock {
-    state: Rc<RefCell<State>>,
     exec_buf: ExecBuffer,
 }
 
 impl CompiledBlock {
-    pub fn new(state: Rc<RefCell<State>>, buf: ExecBuffer) -> Self {
-        Self {
-            state,
-            exec_buf: buf,
-        }
+    pub fn new(buf: ExecBuffer) -> Self {
+        Self { exec_buf: buf }
     }
 
     pub(crate) fn execute(&self) -> usize {
-        let _state = self.state.borrow_mut();
         self.exec_buf.execute();
         0
     }
 }
 
 pub struct Cache {
-    jit: JitEngine,
     blocks: BTreeRange<Rc<CompiledBlock>>,
 }
 
 impl Cache {
+    pub fn new() -> Self {
+        todo!()
+    }
+
     /// Get a compiled block from the cache or create if no entries were found
-    pub fn get_or_compile(&mut self, addr: usize, state: &Rc<RefCell<State>>) -> Rc<CompiledBlock> {
+    pub fn get_or_insert_with<F>(&mut self, addr: usize, mut f: F) -> Rc<CompiledBlock>
+    where
+        F: FnMut() -> (CompiledBlock, usize),
+    {
         if let Some(block) = self.blocks.get_exact(addr) {
             return block.clone();
         }
 
-        // .or_insert_with({
-        let (block, len) = {
-            let state = state.clone();
-            tracing::debug!("Generating cache for address '0x{addr:08x}'");
+        // let (block, len) = {
+        //     tracing::debug!("Generating cache for address '0x{addr:08x}'");
 
-            let cycles = 1024;
+        //     let cycles = 1024usize;
 
-            let (buf, len) = self.jit.compile_block(state.clone(), cycles);
+        //     let (buf, len) = compiler.compile(cycles);
 
-            tracing::debug!("Generated code: {:02x?}", buf.as_slice());
-            (Rc::new(CompiledBlock::new(state, buf)), len)
-        };
+        //     tracing::debug!("Generated code: {:02x?}", buf.as_slice());
+        //     (Rc::new(CompiledBlock::new(buf)), len)
+        // };
+        let (block, len) = f();
+        let block = Rc::new(block);
         self.blocks.insert(addr..=addr + len, block.clone());
-
-        if let Some(invalidated_range) = state.borrow_mut().cache_invalidation.take() {
-            self.blocks.retain(|(start, end), _| {
-                !(invalidated_range.0 <= end && invalidated_range.1 >= start)
-            });
-        }
-
         block
+    }
+
+    pub fn invalidate_range(&mut self, inv_start: usize, inv_end: usize) {
+        self.blocks
+            .retain(|(start, end), _| !(inv_start <= end && inv_end >= start));
     }
 }
 
@@ -65,7 +64,6 @@ impl Default for Cache {
     /// Creates a new cache manager for jitted instructions
     fn default() -> Cache {
         Self {
-            jit: JitEngine::new(),
             blocks: BTreeRange::new(),
         }
     }

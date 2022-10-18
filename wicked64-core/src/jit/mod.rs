@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::n64::State;
 
-use self::compiler::{Compiler, ExecBuffer};
+use self::{
+    cache::{Cache, CompiledBlock},
+    compiler::Compiler,
+};
 
 mod bridge;
 pub(crate) mod cache;
@@ -11,18 +14,45 @@ pub(crate) mod register;
 pub mod state;
 
 /// JIT codegen engine
-#[derive(Debug, Default)]
-pub struct JitEngine {}
+pub struct JitEngine {
+    cache: Cache,
+    state: Rc<RefCell<State>>,
+}
 
 impl JitEngine {
-    pub fn new() -> JitEngine {
-        Self::default()
+    pub fn new(state: Rc<RefCell<State>>) -> Self {
+        Self {
+            cache: Cache::default(),
+            state,
+        }
     }
 
-    pub fn compile_block(&self, state: Rc<RefCell<State>>, cycles: usize) -> (ExecBuffer, usize) {
-        let pclock_size = 5;
-        let pclocks = cycles * pclock_size;
+    pub fn compile_current_pc(&mut self) -> Rc<CompiledBlock> {
+        let pc = {
+            let cpu = &self.state.borrow().cpu;
+            cpu.translate_virtual(cpu.pc as usize)
+        };
 
-        Compiler::new(state).compile(pclocks)
+        let block = self.cache.get_or_insert_with(pc, || {
+            let state = &self.state;
+            let compiler = Compiler::new(state.clone());
+            tracing::debug!("Compiling block at pc '0x{pc:08x}'");
+            let cycles = 1024usize;
+
+            let (buf, len) = compiler.compile(cycles);
+
+            tracing::debug!("Generated code: {:02x?}", buf.as_slice());
+            (CompiledBlock::new(buf), len)
+        });
+
+        self.invalidate_cache();
+
+        block
+    }
+
+    pub fn invalidate_cache(&mut self) {
+        if let Some((inv_start, inv_end)) = self.state.borrow_mut().cache_invalidation.take() {
+            self.cache.invalidate_range(inv_start, inv_end);
+        }
     }
 }

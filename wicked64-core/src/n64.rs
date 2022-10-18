@@ -2,12 +2,12 @@ use std::{cell::RefCell, marker::PhantomData, path::Path, rc::Rc};
 
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::{cpu::Cpu, io::Cartridge, jit::cache::Cache, mmu::MemoryManager};
+use crate::{cpu::Cpu, io::Cartridge, jit::JitEngine, mmu::MemoryManager};
 
 /// N64 state
 pub struct N64<O: ByteOrder> {
     state: Rc<RefCell<State>>,
-    cache: Cache,
+    jit: JitEngine,
     #[allow(unused)]
     clocks: usize,
     _marker: PhantomData<O>,
@@ -24,13 +24,12 @@ impl<O: ByteOrder> N64<O> {
         let mut mmu = MemoryManager::new(Cartridge::open(rom_path)?);
         let cpu = Cpu::new(true, &mut mmu);
 
-        let cache = Cache::default();
         let state = Rc::new(RefCell::new(State::new(mmu, cpu)));
 
         Ok(Self {
-            state,
+            state: state.clone(),
             clocks: 0,
-            cache,
+            jit: JitEngine::new(state),
             _marker: PhantomData::default(),
         })
     }
@@ -41,12 +40,7 @@ impl<O: ByteOrder> N64<O> {
 
     /// Step the execution of the current running game
     pub fn step(&mut self) {
-        let phys_pc = {
-            let cpu = &self.state.borrow().cpu;
-            cpu.translate_virtual(cpu.pc as usize)
-        };
-
-        let code = self.cache.get_or_compile(phys_pc, &self.state);
+        let code = self.jit.compile_current_pc();
         code.execute();
 
         {
@@ -92,6 +86,7 @@ mod tests {
         tracing::info!("Beginning the execution");
 
         loop {
+            tracing::debug!("PC: {:08x}", n64.state.borrow().cpu.pc);
             n64.step();
         }
     }
