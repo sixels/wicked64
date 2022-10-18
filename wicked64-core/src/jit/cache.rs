@@ -14,9 +14,8 @@ impl CompiledBlock {
         Self { exec_buf: buf }
     }
 
-    pub(crate) fn execute(&self) -> usize {
-        self.exec_buf.execute();
-        0
+    pub fn execute(&self) {
+        unsafe { self.exec_buf.execute() };
     }
 }
 
