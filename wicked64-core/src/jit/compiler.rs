@@ -99,12 +99,28 @@ impl ExecBuffer {
         })
     }
 
-    pub fn execute(&self) {
-        let _state = self.state.borrow_mut();
-        unsafe {
-            let f: unsafe extern "C" fn() = std::mem::transmute(self.ptr);
-            f();
-        }
+    #[allow(clippy::borrow_as_ptr)]
+    /// Execute the generated code
+    ///
+    /// # Safety
+    /// This function uses inline assembly to setup the stack frame before
+    /// jumping into the memory containing the generated code.
+    /// It is expected that the code jumps back to the address saved in `r13`
+    /// register.
+    pub unsafe fn execute(&self) {
+        let state = self.state.borrow_mut();
+        let state_addr = (&*state) as *const _ as u64;
+
+        let fn_ptr = self.ptr;
+        std::arch::asm!(
+            "lea r13, [rip+3]", // save the address of the instruction after `jmp` as a return address
+            "jmp r14",
+
+            out("r13") _,
+            out("r15") _,
+            in("r14") fn_ptr,
+            in("rsi") state_addr,
+        );
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -145,6 +161,7 @@ impl Compiler {
         for reg in SCRATCHY_REGISTERS {
             regs.exclude_register(reg);
         }
+        regs.exclude_register(code_asm::r13);
 
         Self {
             pc,
@@ -162,9 +179,10 @@ impl Compiler {
     pub fn compile(mut self, cycles: usize) -> (ExecBuffer, usize) {
         tracing::debug!("Generating compiled block");
 
-        let initial_pc = self.state.borrow().cpu.pc;
-
+        let initial_pc = self.pc;
         let compiled_cycles = self.compile_block(cycles).unwrap();
+
+        self.emitter.jmp(code_asm::r13).unwrap();
 
         let compiled = match assemble_code(self.emitter, self.state.into_inner()) {
             Ok(compiled) => compiled,
@@ -185,16 +203,6 @@ impl Compiler {
     }
 
     fn compile_block(&mut self, cycles: usize) -> AssembleResult<usize> {
-        let state_addr = self.state.state_ptr() as *mut State as u64;
-
-        self.save_register(code_asm::rsi);
-        self.save_register(code_asm::rdi);
-        self.emitter.mov(code_asm::rsi, state_addr)?;
-
-        for reg in SCRATCHY_REGISTERS {
-            self.save_register(reg);
-        }
-
         let mut total_cycles = 0;
         while total_cycles < cycles {
             // fetch the next instruction and update the PC and cycles
@@ -232,7 +240,6 @@ impl Compiler {
 
         // restore callee saved registers and return
         self.restore_registers();
-        self.emitter.ret().unwrap();
 
         Ok(total_cycles)
     }
