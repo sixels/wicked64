@@ -7,6 +7,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::match_bool)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::borrow_as_ptr)]
 
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("Your CPU does not supports 64-bit integers");
