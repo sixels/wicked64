@@ -2,7 +2,12 @@ use std::{cell::RefCell, marker::PhantomData, path::Path, rc::Rc};
 
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::{cpu::Cpu, io::Cartridge, jit::JitEngine, mmu::MemoryManager};
+use crate::{
+    cpu::Cpu,
+    io::Cartridge,
+    jit::{Interruption, JitEngine},
+    mmu::MemoryManager,
+};
 
 /// N64 state
 pub struct N64<O: ByteOrder> {
@@ -39,13 +44,34 @@ impl<O: ByteOrder> N64<O> {
     }
 
     /// Step the execution of the current running game
-    pub fn step(&mut self) {
-        let code = self.jit.compile_current_pc();
-        code.execute();
+    pub fn cycle(&mut self) {
+        loop {
+            self.jit.invalidate_cache();
 
-        {
-            let cpu = &self.state.borrow().cpu;
-            println!("{:02x?}", cpu.gpr);
+            // handle interruptions
+            let mut resume_jump = None;
+            let interruption = self.state.borrow().interruption;
+            match interruption {
+                Interruption::PrepareJump(addr) => {
+                    tracing::debug!("Resolving jump to: {addr:08x}");
+                    {
+                        self.state.borrow_mut().cpu.pc = addr;
+                    }
+                    resume_jump = Some(self.jit.resolve_jump(addr as usize));
+                }
+                Interruption::None => {}
+            }
+
+            tracing::debug!("CPU PC: {:08x}", self.state.borrow().cpu.pc);
+
+            let code = self.jit.compile_current_pc();
+            if let Some(jump_addr) = resume_jump {
+                self.jit.resume_with(jump_addr);
+            } else {
+                code.execute();
+            }
+
+            code.execute();
         }
     }
 }
@@ -55,6 +81,8 @@ pub struct State {
     pub mmu: MemoryManager,
     pub cpu: Cpu<BigEndian>,
     pub cache_invalidation: Option<(usize, usize)>,
+    pub interruption: Interruption,
+    pub resume_addr: u64,
 }
 
 impl State {
@@ -63,7 +91,12 @@ impl State {
             mmu,
             cpu,
             cache_invalidation: None,
+            interruption: Interruption::None,
+            resume_addr: 0,
         }
+    }
+    pub fn translate_cpu_pc(&self) -> usize {
+        self.cpu.translate_virtual(self.cpu.pc as usize)
     }
 }
 
@@ -85,10 +118,9 @@ mod tests {
         skip_boot_process(&n64);
         tracing::info!("Beginning the execution");
 
-        loop {
-            tracing::debug!("PC: {:08x}", n64.state.borrow().cpu.pc);
-            n64.step();
-        }
+        // loop {
+        n64.cycle();
+        // }
     }
 
     fn skip_boot_process<O: ByteOrder>(n64: &N64<O>) {
