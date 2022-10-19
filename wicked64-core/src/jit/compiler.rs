@@ -10,6 +10,9 @@ use crate::jit::{
 };
 use crate::n64::State;
 
+use super::code::ExecBuffer;
+use super::interruption::Interruption;
+use super::jump_table::JumpTable;
 use super::state::JitState;
 
 const SCRATCHY_REGISTERS: [AsmRegister64; 2] = [code_asm::r14, code_asm::r15];
@@ -79,55 +82,6 @@ macro_rules! wrap_call {
     }};
 }
 
-#[derive(Clone)]
-pub struct ExecBuffer {
-    ptr: *const u8,
-    buf: Vec<u8>,
-    state: Rc<RefCell<State>>,
-}
-
-impl ExecBuffer {
-    unsafe fn new(buffer: Vec<u8>, state: Rc<RefCell<State>>) -> region::Result<Self> {
-        let ptr = buffer.as_ptr();
-
-        region::protect(ptr, buffer.len(), region::Protection::READ_WRITE_EXECUTE)?;
-
-        Ok(Self {
-            buf: buffer,
-            ptr,
-            state,
-        })
-    }
-
-    #[allow(clippy::borrow_as_ptr)]
-    /// Execute the generated code
-    ///
-    /// # Safety
-    /// This function uses inline assembly to setup the stack frame before
-    /// jumping into the memory containing the generated code.
-    /// It is expected that the code jumps back to the address saved in `r13`
-    /// register.
-    pub unsafe fn execute(&self) {
-        let state = self.state.borrow_mut();
-        let state_addr = (&*state) as *const _ as u64;
-
-        let fn_ptr = self.ptr;
-        std::arch::asm!(
-            "lea r13, [rip+3]", // save the address of the instruction after `jmp` as a return address
-            "jmp r14",
-
-            out("r13") _,
-            out("r15") _,
-            in("r14") fn_ptr,
-            in("rsi") state_addr,
-        );
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        self.buf.as_slice()
-    }
-}
-
 fn assemble_code(
     mut emitter: CodeAssembler,
     state: Rc<RefCell<State>>,
@@ -138,24 +92,20 @@ fn assemble_code(
 }
 
 /// The JIT compiler
-pub struct Compiler {
+pub struct Compiler<'jt> {
     state: JitState,
     pc: u64,
-    phys_pc: u64,
     regs: Registers,
     emitter: CodeAssembler,
     saved_regs: Vec<AsmRegister64>,
+    jump_table: &'jt mut JumpTable,
 }
 
-impl Compiler {
+impl<'jt> Compiler<'jt> {
     /// Create a new Jit compiler
     /// # Panics
     /// Panics if the cpu architecture is not 64-bit
-    pub fn new(state: Rc<RefCell<State>>) -> Self {
-        let (pc, phys_pc) = {
-            let cpu = &state.borrow().cpu;
-            (cpu.pc, cpu.translate_virtual(cpu.pc as usize) as u64)
-        };
+    pub fn new(state: Rc<RefCell<State>>, jump_table: &'jt mut JumpTable, addr: usize) -> Self {
         let mut regs = Registers::new();
 
         for reg in SCRATCHY_REGISTERS {
@@ -164,12 +114,12 @@ impl Compiler {
         regs.exclude_register(code_asm::r13);
 
         Self {
-            pc,
-            phys_pc,
+            pc: addr as u64,
             regs,
             state: JitState::new(state),
             emitter: CodeAssembler::new(64).unwrap(),
             saved_regs: Vec::new(),
+            jump_table,
         }
     }
 
@@ -181,8 +131,6 @@ impl Compiler {
 
         let initial_pc = self.pc;
         let compiled_cycles = self.compile_block(cycles).unwrap();
-
-        self.emitter.jmp(code_asm::r13).unwrap();
 
         let compiled = match assemble_code(self.emitter, self.state.into_inner()) {
             Ok(compiled) => compiled,
@@ -214,7 +162,6 @@ impl Compiler {
                     .map_err(|_| AssembleError::Cpu)?;
 
                 self.pc += 4;
-                self.phys_pc += 4;
                 total_cycles += instruction.cycles();
 
                 instruction
@@ -232,14 +179,16 @@ impl Compiler {
                     )?;
                     break;
                 }
-                AssembleStatus::Branch => break,
+                AssembleStatus::Branch => {
+                    return Ok(total_cycles);
+                }
             }
         }
 
-        self.sync_all_registers().unwrap();
+        self.sync_all_registers()?;
+        self.restore_registers()?;
 
-        // restore callee saved registers and return
-        self.restore_registers();
+        self.emitter.jmp(code_asm::r13)?;
 
         Ok(total_cycles)
     }
@@ -250,7 +199,7 @@ impl Compiler {
         match instruction {
             Instruction::LUI(ImmediateType { rt, immediate, .. }) => {
                 // rt = immediate << 16
-                let host_rt = self.get_cpu_register(rt);
+                let host_rt = self.get_cpu_register(rt)?;
                 let imm = (immediate as u64) << 16;
                 self.emitter.mov(host_rt, imm)?;
 
@@ -260,8 +209,8 @@ impl Compiler {
                 rs, rt, immediate, ..
             }) => {
                 // rt = rs | immediate
-                let host_rt = self.get_cpu_register(rt);
-                let host_rs = self.get_cpu_register(rs);
+                let host_rt = self.get_cpu_register(rt)?;
+                let host_rs = self.get_cpu_register(rs)?;
 
                 self.emitter.mov(host_rt, immediate as u64)?;
                 self.emitter.or(host_rt, host_rs)?;
@@ -276,8 +225,8 @@ impl Compiler {
             }) => {
                 // mmu[rs + offset] = rt
                 {
-                    let rs = self.get_cpu_register(rs);
-                    let rt = self.get_cpu_register(rt);
+                    let rs = self.get_cpu_register(rs)?;
+                    let rt = self.get_cpu_register(rt)?;
 
                     let state_addr = self.state.state_ptr();
 
@@ -291,10 +240,18 @@ impl Compiler {
                 Ok(AssembleStatus::InvalidateCache)
             }
             Instruction::JAL(JumpType { target, .. }) => {
+                extern "C" fn get_host_jump_addr(
+                    jump_table: &mut JumpTable,
+                    n64_addr: u32,
+                ) -> &usize {
+                    tracing::debug!("Getting jump location for n64 addr {n64_addr:08x}");
+                    &jump_table.get(n64_addr as usize).jump_to
+                }
+
                 // r31 = pc + 8
                 // pc = (pc & 0xf000_0000) | (target << 2)
-                let guest_pc = self.get_cpu_pc();
-                let r31 = self.get_cpu_register(31);
+                let guest_pc = self.get_cpu_pc()?;
+                let r31 = self.get_cpu_register(31)?;
                 self.emitter.mov(code_asm::r14, guest_pc)?;
                 self.emitter.mov(code_asm::r15d, target)?;
 
@@ -305,7 +262,20 @@ impl Compiler {
                 self.emitter.and(code_asm::r14d, 0xf000_0000u32 as i32)?;
                 self.emitter.or(code_asm::r14d, code_asm::r15d)?;
 
-                self.emitter.mov(guest_pc, code_asm::r14)?;
+                let jump_table_addr = self.jump_table as *mut _ as u64;
+                wrap_call!(
+                self,
+                get_host_jump_addr[
+                    val: jump_table_addr,
+                    reg: code_asm::r14
+                    ]
+                )?;
+
+                self.emitter.mov(code_asm::r15, code_asm::r14)?;
+                self.emit_interruption(Interruption::PrepareJump(0), Some(code_asm::r15))?;
+
+                // resume passes the jump address in r15
+                self.emitter.jmp(code_asm::qword_ptr(code_asm::r15))?;
 
                 Ok(AssembleStatus::Branch)
             }
@@ -361,8 +331,6 @@ impl Compiler {
 
         // set the stack size
         if stack_size > 0 {
-            self.emitter.push(code_asm::rbp)?;
-            self.emitter.mov(code_asm::rbp, code_asm::rsp)?;
             self.emitter.add_instruction(iced_x86::Instruction::with2(
                 iced_x86::Code::Sub_rm64_imm32,
                 iced_x86::Register::RSP,
@@ -395,7 +363,6 @@ impl Compiler {
                 iced_x86::Register::RSP,
                 stack_size as u32,
             )?)?;
-            self.emitter.pop(code_asm::rbp)?;
         }
 
         call_fn(&mut self.emitter)?;
@@ -405,43 +372,94 @@ impl Compiler {
         Ok(())
     }
 
-    #[must_use]
-    fn get_cpu_register(&mut self, register: u8) -> AsmRegister64 {
+    fn emit_interruption(
+        &mut self,
+        interruption: Interruption,
+        data_reg: Option<AsmRegister64>,
+    ) -> AssembleResult<()> {
+        tracing::debug!("Generating interruption: {interruption:?}");
+
+        let (state_interruption, state_resume) = {
+            let state = self.state.borrow();
+            (
+                &state.interruption as *const _ as u64,
+                &state.resume_addr as *const _ as u64,
+            )
+        };
+
+        self.sync_all_registers()?;
+        self.restore_registers()?;
+
+        self.emitter.push(code_asm::r14)?;
+        self.emitter.push(code_asm::r15)?;
+
+        let n = {
+            let ptr: *const Interruption = &interruption;
+            let bytes_ptr = ptr.cast::<u8>();
+            unsafe { std::ptr::read(bytes_ptr) }
+        };
+
+        // state.interruption = Interruption::KIND(*data_reg)
+        self.emitter.mov(code_asm::r14, state_interruption)?;
+        self.emitter
+            .mov(code_asm::byte_ptr(code_asm::r14), n as u32)?;
+        if let Some(data_reg) = data_reg {
+            self.emitter
+                .mov(code_asm::qword_ptr(code_asm::r14 + 8), data_reg)?;
+        }
+
+        // state.resume_addr = rip+10
+        self.emitter.mov(code_asm::r14, state_resume)?;
+        self.emitter.add_instruction(iced_x86::Instruction::with2(
+            iced_x86::Code::Lea_r64_m,
+            iced_x86::Register::R15,
+            iced_x86::MemoryOperand::with_base_displ(iced_x86::Register::RIP, 10),
+        )?)?;
+        self.emitter
+            .mov(code_asm::ptr(code_asm::r14), code_asm::r15)?;
+
+        self.emitter.pop(code_asm::r15)?;
+        self.emitter.pop(code_asm::r14)?;
+
+        self.emitter.jmp(code_asm::r13)?;
+
+        Ok(())
+    }
+
+    fn get_cpu_register(&mut self, register: u8) -> AssembleResult<AsmRegister64> {
         self.get_host_register(GuestRegister::cpu(register), |emitter, state, host_reg| {
             // load the register value
             let reg_offset = state.offset_of(|state| &state.cpu.gpr[register as usize]);
-            emitter
-                .mov(host_reg, code_asm::ptr(code_asm::rsi + reg_offset))
-                .unwrap();
+            emitter.mov(host_reg, code_asm::ptr(code_asm::rsi + reg_offset))?;
+            Ok(())
         })
     }
 
-    #[must_use]
-    fn get_cpu_pc(&mut self) -> AsmRegister64 {
+    fn get_cpu_pc(&mut self) -> AssembleResult<AsmRegister64> {
         self.get_host_register(GuestRegister::pc(), |emitter, state, host_reg| {
             // load the register value
             let reg_offset = state.offset_of(|state| &state.cpu.pc);
-            emitter
-                .mov(host_reg, code_asm::ptr(code_asm::rsi + reg_offset))
-                .unwrap();
+            emitter.mov(host_reg, code_asm::ptr(code_asm::rsi + reg_offset))?;
+            Ok(())
         })
     }
 
     /// Gets a host register from the given guest register
-    #[must_use]
-    fn get_host_register(
+    fn get_host_register<F>(
         &mut self,
         guest_reg: GuestRegister,
-        initialize_with: impl FnOnce(&mut CodeAssembler, &JitState, AsmRegister64),
-    ) -> AsmRegister64 {
-        if let Some(reg) = self.regs.get(guest_reg) {
-            *reg
+        initialize_with: F,
+    ) -> AssembleResult<AsmRegister64>
+    where
+        F: FnOnce(&mut CodeAssembler, &JitState, AsmRegister64) -> AssembleResult<()>,
+    {
+        if let Some(&reg) = self.regs.get(guest_reg) {
+            Ok(reg)
         } else {
             let (&reg, dropped) = self.regs.insert(guest_reg).unwrap();
 
             if CALLEE_SAVED_REGISTERS.contains(&reg) && !self.saved_regs.contains(&reg) {
-                self.emitter.push(reg).unwrap();
-                self.saved_regs.push(reg);
+                self.save_register(reg)?;
             }
 
             tracing::debug!(
@@ -450,11 +468,11 @@ impl Compiler {
             );
 
             if let Some(dropped) = dropped {
-                self.sync_guest_with(dropped, reg).unwrap();
+                self.sync_guest_with(dropped, reg)?;
             };
 
-            initialize_with(&mut self.emitter, &self.state, reg);
-            reg
+            initialize_with(&mut self.emitter, &self.state, reg)?;
+            Ok(reg)
         }
     }
 
@@ -496,13 +514,15 @@ impl Compiler {
         Ok(())
     }
 
-    fn save_register(&mut self, reg: AsmRegister64) {
+    fn save_register(&mut self, reg: AsmRegister64) -> AssembleResult<()> {
         self.saved_regs.push(reg);
-        self.emitter.push(reg).unwrap();
+        self.emitter.push(reg)?;
+        Ok(())
     }
-    fn restore_registers(&mut self) {
+    fn restore_registers(&mut self) -> AssembleResult<()> {
         for reg in self.saved_regs.drain(..).rev() {
-            self.emitter.pop(reg).unwrap();
+            self.emitter.pop(reg)?;
         }
+        Ok(())
     }
 }
