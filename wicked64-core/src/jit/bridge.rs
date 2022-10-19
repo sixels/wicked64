@@ -5,6 +5,7 @@ pub extern "C" fn mmu_store(state: &mut State, virt_addr: usize, rt: u64) {
         cpu,
         mmu,
         cache_invalidation,
+        ..
     } = state;
 
     let phys_addr = cpu.translate_virtual(virt_addr);
