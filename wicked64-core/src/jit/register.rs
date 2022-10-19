@@ -203,9 +203,6 @@ impl GuestRegister {
     // pub fn cop0(index: usize) -> Self {
     //     Self::new(index, GuestRegisterKind::Cop0)
     // }
-    // pub fn tmp(id: usize) -> Self {
-    //     Self::new(id, GuestRegisterKind::Temporary)
-    // }
 }
 
 #[derive(Debug, Clone)]
