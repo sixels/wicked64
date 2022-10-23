@@ -5,11 +5,17 @@ use crate::n64::State;
 #[derive(Clone)]
 pub struct CompiledBlock {
     exec_buf: ExecBuffer,
+    start_pc: u64,
+    len: usize,
 }
 
 impl CompiledBlock {
-    pub fn new(buf: ExecBuffer) -> Self {
-        Self { exec_buf: buf }
+    pub fn new(buf: ExecBuffer, start_pc: u64, len: usize) -> Self {
+        Self {
+            exec_buf: buf,
+            start_pc,
+            len,
+        }
     }
 
     pub fn execute(&self) {
@@ -43,7 +49,8 @@ impl ExecBuffer {
 
     pub unsafe fn execute(&self) {
         let fn_ptr = self.ptr;
-        execute(&self.state, fn_ptr as usize);
+        let state = self.state.borrow_mut();
+        execute((&*state) as *const _ as usize, fn_ptr as usize);
     }
 
     pub fn ptr(&self) -> *const u8 {
@@ -62,21 +69,17 @@ impl ExecBuffer {
 /// jumping into the memory containing the generated code.
 /// It is expected that the code jumps back to the address saved in `r13`
 /// register.
-pub unsafe fn execute(state: &Rc<RefCell<State>>, resume_addr: usize) {
-    let state = state.borrow_mut();
-    let state_addr = (&*state) as *const _ as u64;
-
+pub unsafe fn execute(state_addr: usize, resume_addr: usize) {
     asm!(
         "lea r13, [rip+3]", // save the address of the instruction after `jmp` as a return address
         "jmp r14",
 
-        out("r13") _,
-        out("r15") _,
         in("r14") resume_addr,
         in("rsi") state_addr,
+        out("r13") _,
+        out("r15") _,
     );
 }
-
 /// Resumes the generated code
 ///
 /// # Safety
@@ -92,9 +95,9 @@ pub unsafe fn resume(state: &Rc<RefCell<State>>, resume_addr: usize, jump_to: us
         "lea r13, [rip+3]", // save the address of the instruction after `jmp` as a return address
         "jmp r14",
 
-        out("r13") _,
-        in("r15") jump_to,
         in("r14") resume_addr,
+        in("r15") jump_to,
         in("rsi") state_addr,
+        out("r13") _,
     );
 }
