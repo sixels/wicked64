@@ -50,28 +50,28 @@ impl<O: ByteOrder> N64<O> {
 
             // handle interruptions
             let mut resume_jump = None;
-            let interruption = self.state.borrow().interruption;
-            match interruption {
-                Interruption::PrepareJump(addr) => {
-                    tracing::debug!("Resolving jump to: {addr:08x}");
-                    {
+            {
+                let interruption = self.state.borrow_mut().interruption.take();
+                match interruption {
+                    Interruption::PrepareJump(addr) => {
+                        tracing::debug!("Resolving jump to: 0x{addr:08x}");
                         self.state.borrow_mut().cpu.pc = addr;
+                        resume_jump = Some(self.jit.resolve_jump(addr));
                     }
-                    resume_jump = Some(self.jit.resolve_jump(addr as usize));
+                    Interruption::None => {}
                 }
-                Interruption::None => {}
             }
 
             tracing::debug!("CPU PC: {:08x}", self.state.borrow().cpu.pc);
 
-            let code = self.jit.compile_current_pc();
-            if let Some(jump_addr) = resume_jump {
-                self.jit.resume_with(jump_addr);
+            if let Some(jump_entry) = resume_jump.take().flatten() {
+                let target = jump_entry.target_block;
+                self.jit.resume_from(target);
             } else {
+                let code = self.jit.compile_current_pc();
+                tracing::debug!("Executing code at {:p}", code.ptr());
                 code.execute();
             }
-
-            code.execute();
         }
     }
 }
@@ -95,8 +95,8 @@ impl State {
             resume_addr: 0,
         }
     }
-    pub fn translate_cpu_pc(&self) -> usize {
-        self.cpu.translate_virtual(self.cpu.pc as usize)
+    pub fn translate_cpu_pc(&self) -> u64 {
+        self.cpu.translate_virtual(self.cpu.pc)
     }
 }
 
@@ -118,9 +118,7 @@ mod tests {
         skip_boot_process(&n64);
         tracing::info!("Beginning the execution");
 
-        // loop {
         n64.cycle();
-        // }
     }
 
     fn skip_boot_process<O: ByteOrder>(n64: &N64<O>) {
