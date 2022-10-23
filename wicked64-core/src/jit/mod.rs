@@ -2,7 +2,12 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::n64::State;
 
-use self::{cache::Cache, code::CompiledBlock, compiler::Compiler, jump_table::JumpTable};
+use self::{
+    cache::Cache,
+    code::CompiledBlock,
+    compiler::Compiler,
+    jump_table::{JumpEntry, JumpTable},
+};
 
 mod bridge;
 mod cache;
@@ -31,50 +36,56 @@ impl JitEngine {
         }
     }
 
-    pub fn compile(&mut self, virtual_pc: usize) -> Rc<CompiledBlock> {
+    pub fn compile(&mut self, virtual_pc: u64) -> Rc<CompiledBlock> {
         let physical_pc = self.state.borrow().translate_cpu_pc();
 
-        self.cache.get_or_insert_with(physical_pc, || {
+        let block = self.cache.get_or_insert_with(physical_pc as usize, || {
+            tracing::debug!("Compiling a block at addr '{virtual_pc:08x}'");
+
             let state = &self.state;
-            let compiler = Compiler::new(state.clone(), &mut self.jump_table, virtual_pc);
-            tracing::debug!("Compiling block at pc '0x{virtual_pc:08x}'");
+            let compiler = Compiler::new(state.clone(), &mut self.jump_table, virtual_pc as usize);
 
             let cycles = 1024usize;
 
             let (buf, len) = compiler.compile(cycles);
 
-            tracing::debug!("Generated code: {:02x?}", buf.as_slice());
-            (CompiledBlock::new(buf), len)
-        })
+            (CompiledBlock::new(buf, virtual_pc, len), len)
+        });
+
+        tracing::debug!(
+            "Getting block at addr '0x{virtual_pc:08x}' with id: {:p}",
+            block.ptr()
+        );
+
+        block
     }
 
     pub fn compile_current_pc(&mut self) -> Rc<CompiledBlock> {
-        let pc = self.state.borrow().cpu.pc as usize;
+        let pc = self.state.borrow().cpu.pc;
         self.compile(pc)
     }
 
     pub fn invalidate_cache(&mut self) {
+        // ! TODO: delete entries from jump table too
         if let Some((inv_start, inv_end)) = self.state.borrow_mut().cache_invalidation.take() {
             self.cache.invalidate_range(inv_start, inv_end);
         }
     }
 
-    pub(crate) fn resolve_jump(&mut self, addr: usize) -> usize {
+    pub(crate) fn resolve_jump(&mut self, addr: u64) -> Option<&JumpEntry> {
         let block = self.compile(addr);
-        self.jump_table.resolve_to(addr, &block)
+        self.jump_table
+            .resolve_with_block(self.state.borrow().cpu.translate_virtual(addr), &block)
     }
 
-    /// Resume the previous code execution passing `jump_to` information
-    ///
-    /// # Safety
-    /// This function uses inline assembly to setup the stack frame before
-    /// jumping into the memory containing the generated code.
-    /// It is expected that the code jumps back to the address saved in `r13`
-    /// register.
-    pub fn resume_with(&self, jump_to: usize) {
+    pub fn resume_from(&self, resume_block: usize) {
         let resume_addr = self.state.borrow().resume_addr as usize;
+        tracing::debug!(
+            "Resuming execution at 0x{resume_addr:08x} and jumping to 0x{:08x}",
+            resume_block
+        );
         unsafe {
-            code::resume(&self.state, resume_addr, jump_to);
+            code::resume(&self.state, resume_addr, resume_block);
         }
     }
 }
