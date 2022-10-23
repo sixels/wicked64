@@ -219,10 +219,10 @@ impl TryFrom<u32> for Instruction {
 /// I-type instruction
 #[derive(Debug, Clone, Copy)]
 pub struct ImmediateType {
-    pub opcode: u8,     // 6 bits
-    pub rs: u8,         // 5 bits
-    pub rt: u8,         // 5 bits
-    pub immediate: u16, // 16 bits
+    pub opcode: u8, // 6 bits
+    pub rs: u8,     // 5 bits
+    pub rt: u8,     // 5 bits
+    pub imm: u16,   // 16 bits
 }
 
 impl ImmediateType {
@@ -232,7 +232,7 @@ impl ImmediateType {
             opcode: (instruction >> 26) as u8,
             rs: ((instruction >> 21) & 0x1f) as u8,
             rt: ((instruction >> 16) & 0x1f) as u8,
-            immediate: instruction as u16,
+            imm: instruction as u16,
         }
     }
 }
