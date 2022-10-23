@@ -1,3 +1,4 @@
+#![feature(naked_functions)]
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_lossless)]
