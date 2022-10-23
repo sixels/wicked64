@@ -92,8 +92,8 @@ impl<O: ByteOrder> Cpu<O> {
         mmu: &M,
         addr: u64,
     ) -> anyhow::Result<Instruction> {
-        let phys_pc = self.translate_virtual(addr as usize);
-        Instruction::try_from(mmu.read::<u32, O>(phys_pc))
+        let phys_pc = self.translate_virtual(addr);
+        Instruction::try_from(mmu.read::<u32, O>(phys_pc as usize))
     }
 
     /// Translates a virtual address into a physical address
@@ -101,10 +101,10 @@ impl<O: ByteOrder> Cpu<O> {
     /// # Panics
     /// `addr` lies in an unhandled memory segment
 
-    pub fn translate_virtual(&self, addr: usize) -> usize {
+    pub fn translate_virtual(&self, addr: u64) -> u64 {
         match VirtualMemoryMap::from(addr) {
-            VirtualMemoryMap::KSEG0 => addr - (*addr_map::virt::KSEG0_RANGE.start()),
-            VirtualMemoryMap::KSEG1 => addr - (*addr_map::virt::KSEG1_RANGE.start()),
+            VirtualMemoryMap::KSEG0 => addr - (*addr_map::virt::KSEG0_RANGE.start() as u64),
+            VirtualMemoryMap::KSEG1 => addr - (*addr_map::virt::KSEG1_RANGE.start() as u64),
             mm => panic!("Unhandled Virtual Memory segment: {mm:?} (0x{addr:08x})."),
         }
     }
@@ -157,8 +157,8 @@ impl<O: ByteOrder> Cpu<O> {
         // This is implemented as a copy of 0x1000 bytes from 0xB0000000 (VIRTUAL) to
         // 0xA4000000 (VIRTUAL).
         mmu.copy_from(
-            self.translate_virtual(0xa400_0000),
-            self.translate_virtual(0xb000_0000),
+            self.translate_virtual(0xa400_0000) as usize,
+            self.translate_virtual(0xb000_0000) as usize,
             0x1000,
         );
 
