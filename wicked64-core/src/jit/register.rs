@@ -165,13 +165,7 @@ impl Registers {
     pub fn free(&mut self, guest_reg: GuestRegister) -> Option<(GuestRegister, AsmRegister64)> {
         let mut dropped = None;
 
-        if let Some(HostRegister {
-            register,
-            borrow_index,
-            ..
-        }) = self.regs.remove(&guest_reg)
-        {
-            tracing::info!("Dropping register {register:?} with borrow_index of {borrow_index}");
+        if let Some(HostRegister { register, .. }) = self.regs.remove(&guest_reg) {
             self.free_regs.insert(register);
             dropped = Some((guest_reg, register.0));
         }
@@ -184,6 +178,7 @@ impl Registers {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum GuestRegister {
     /// CPU register
