@@ -121,17 +121,65 @@ pub enum Instruction {
 impl Instruction {
     /// Decode a SPECIAL instruction
     fn decode_special(instruction: u32) -> anyhow::Result<Instruction> {
-        let _rtype = RegisterType::new(instruction);
+        let rtype = RegisterType::new(instruction);
 
-        todo!("Special instructions not implemented")
-        // match SpecialFunct::try_from(rtype.funct) {
-        //     Ok(funct) => match funct {
-        //         other => {
-        //             anyhow::bail!("Unhandled Special instruction {other:?} (0x{instruction:08x})")
-        //         }
-        //     },
-        //     Err(_) => anyhow::bail!("Unknown Special instruction: 0x{instruction:08x}"),
-        // }
+        match SpecialFunct::try_from(rtype.funct) {
+            Ok(funct) => match funct {
+                SpecialFunct::SLL => Ok(Instruction::SpecialSLL(rtype)),
+                SpecialFunct::SRL => Ok(Instruction::SpecialSRL(rtype)),
+                SpecialFunct::SRA => Ok(Instruction::SpecialSRA(rtype)),
+                SpecialFunct::SLLV => Ok(Instruction::SpecialSLLV(rtype)),
+                SpecialFunct::SRLV => Ok(Instruction::SpecialSRLV(rtype)),
+                SpecialFunct::SRAV => Ok(Instruction::SpecialSRAV(rtype)),
+                SpecialFunct::JR => Ok(Instruction::SpecialJR(rtype)),
+                SpecialFunct::JALR => Ok(Instruction::SpecialJALR(rtype)),
+                SpecialFunct::SYSCALL => Ok(Instruction::SpecialSYSCALL(rtype)),
+                SpecialFunct::BREAK => Ok(Instruction::SpecialBREAK(rtype)),
+                SpecialFunct::SYNC => Ok(Instruction::SpecialSYNC(rtype)),
+                SpecialFunct::MFHI => Ok(Instruction::SpecialMFHI(rtype)),
+                SpecialFunct::MTHI => Ok(Instruction::SpecialMTHI(rtype)),
+                SpecialFunct::MFLO => Ok(Instruction::SpecialMFLO(rtype)),
+                SpecialFunct::MTLO => Ok(Instruction::SpecialMTLO(rtype)),
+                SpecialFunct::DSLLV => Ok(Instruction::SpecialDSLLV(rtype)),
+                SpecialFunct::DSRLV => Ok(Instruction::SpecialDSRLV(rtype)),
+                SpecialFunct::DSRAV => Ok(Instruction::SpecialDSRAV(rtype)),
+                SpecialFunct::MULT => Ok(Instruction::SpecialMULT(rtype)),
+                SpecialFunct::MULTU => Ok(Instruction::SpecialMULTU(rtype)),
+                SpecialFunct::DIV => Ok(Instruction::SpecialDIV(rtype)),
+                SpecialFunct::DIVU => Ok(Instruction::SpecialDIVU(rtype)),
+                SpecialFunct::DMULT => Ok(Instruction::SpecialDMULT(rtype)),
+                SpecialFunct::DMULTU => Ok(Instruction::SpecialDMULTU(rtype)),
+                SpecialFunct::DDIV => Ok(Instruction::SpecialDDIV(rtype)),
+                SpecialFunct::DDIVU => Ok(Instruction::SpecialDDIVU(rtype)),
+                SpecialFunct::ADD => Ok(Instruction::SpecialADD(rtype)),
+                SpecialFunct::ADDU => Ok(Instruction::SpecialADDU(rtype)),
+                SpecialFunct::SUB => Ok(Instruction::SpecialSUB(rtype)),
+                SpecialFunct::SUBU => Ok(Instruction::SpecialSUBU(rtype)),
+                SpecialFunct::AND => Ok(Instruction::SpecialAND(rtype)),
+                SpecialFunct::OR => Ok(Instruction::SpecialOR(rtype)),
+                SpecialFunct::XOR => Ok(Instruction::SpecialXOR(rtype)),
+                SpecialFunct::NOR => Ok(Instruction::SpecialNOR(rtype)),
+                SpecialFunct::SLT => Ok(Instruction::SpecialSLT(rtype)),
+                SpecialFunct::SLTU => Ok(Instruction::SpecialSLTU(rtype)),
+                SpecialFunct::DADD => Ok(Instruction::SpecialDADD(rtype)),
+                SpecialFunct::DADDU => Ok(Instruction::SpecialDADDU(rtype)),
+                SpecialFunct::DSUB => Ok(Instruction::SpecialDSUB(rtype)),
+                SpecialFunct::DSUBU => Ok(Instruction::SpecialDSUBU(rtype)),
+                SpecialFunct::TGE => Ok(Instruction::SpecialTGE(rtype)),
+                SpecialFunct::TGEU => Ok(Instruction::SpecialTGEU(rtype)),
+                SpecialFunct::TLT => Ok(Instruction::SpecialTLT(rtype)),
+                SpecialFunct::TLTU => Ok(Instruction::SpecialTLTU(rtype)),
+                SpecialFunct::TEQ => Ok(Instruction::SpecialTEQ(rtype)),
+                SpecialFunct::TNE => Ok(Instruction::SpecialTNE(rtype)),
+                SpecialFunct::DSLL => Ok(Instruction::SpecialDSLL(rtype)),
+                SpecialFunct::DSRL => Ok(Instruction::SpecialDSRL(rtype)),
+                SpecialFunct::DSRA => Ok(Instruction::SpecialDSRA(rtype)),
+                SpecialFunct::DSLL32 => Ok(Instruction::SpecialDSLL32(rtype)),
+                SpecialFunct::DSRL32 => Ok(Instruction::SpecialDSRL32(rtype)),
+                SpecialFunct::DSRA32 => Ok(Instruction::SpecialDSRA32(rtype)),
+            },
+            Err(_) => anyhow::bail!("Unknown Special instruction: 0x{instruction:08x}"),
+        }
     }
 
     /// Decode a COP0 instruction.
