@@ -105,13 +105,13 @@ pub enum VirtualMemoryMap {
     KSEG3,
 }
 
-impl From<usize> for VirtualMemoryMap {
-    fn from(addr: usize) -> Self {
-        VIRT_MAP.get(addr).copied().unwrap()
+impl From<u64> for VirtualMemoryMap {
+    fn from(addr: u64) -> Self {
+        VIRT_MAP.get(addr as usize).copied().unwrap()
     }
 }
 impl From<u32> for VirtualMemoryMap {
     fn from(addr: u32) -> Self {
-        (addr as usize).into()
+        (addr as u64).into()
     }
 }
