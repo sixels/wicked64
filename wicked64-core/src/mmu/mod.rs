@@ -68,10 +68,9 @@ impl MemoryUnit for Box<[u8]> {
     }
 
     fn buffer(&self) -> &[u8] {
-        &**self
+        self
     }
-
     fn buffer_mut(&mut self) -> &mut [u8] {
-        &mut **self
+        self
     }
 }
