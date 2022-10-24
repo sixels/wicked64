@@ -110,7 +110,7 @@ impl<'jt> Compiler<'jt> {
         self.emitter.mov(code_asm::r14, offset as i16 as u64)?;
         self.emitter.add(code_asm::r14, rs)?;
 
-        wrap_call!(self, bridge::mmu_store[val: state_addr as u64, reg: code_asm::r14, reg: rt])?;
+        wrap_call!(self, bridge::mmu_store_qword[val: state_addr as u64, reg: code_asm::r14, reg: rt])?;
 
         // `mmu_store` might invalidate the current memory region
         Ok(AssembleStatus::InvalidateCache)

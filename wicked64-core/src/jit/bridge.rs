@@ -4,7 +4,7 @@ use crate::{mmu::MemoryUnit, n64::State};
 
 use super::jump_table::JumpTable;
 
-pub extern "C" fn mmu_store(state: &mut State, virt_addr: u64, rt: u64) {
+pub extern "C" fn mmu_store_qword(state: &mut State, virt_addr: u64, value: u64) {
     let State {
         cpu,
         mmu,
