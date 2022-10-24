@@ -1,4 +1,6 @@
 mod instructions;
+mod register;
+mod state;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -6,12 +8,13 @@ use std::rc::Rc;
 use iced_x86::code_asm::{self, AsmRegister64, CodeAssembler};
 
 use crate::cpu::instruction::Instruction;
-use crate::jit::register::{GuestRegister, Registers, CALLEE_SAVED_REGISTERS};
 use crate::n64::State;
+
+use self::register::{GuestRegister, Registers, CALLEE_SAVED_REGISTERS};
+use self::state::JitState;
 
 use super::code::ExecBuffer;
 use super::jump_table::JumpTable;
-use super::state::JitState;
 
 const SCRATCHY_REGISTERS: [AsmRegister64; 2] = [code_asm::r14, code_asm::r15];
 

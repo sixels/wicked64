@@ -15,8 +15,6 @@ mod code;
 mod compiler;
 mod interruption;
 mod jump_table;
-mod register;
-mod state;
 
 pub use interruption::Interruption;
 

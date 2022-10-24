@@ -2,10 +2,10 @@ use iced_x86::code_asm::{self, AsmRegister64, CodeAssembler};
 
 use crate::{
     cpu::instruction::{ImmediateType, JumpType},
-    jit::{bridge, register::ARGS_REGS, Interruption},
+    jit::{bridge, Interruption},
 };
 
-use super::{AssembleResult, AssembleStatus, Compiler};
+use super::{register::ARGS_REGS, AssembleResult, AssembleStatus, Compiler};
 
 type Result = AssembleResult<AssembleStatus>;
 
