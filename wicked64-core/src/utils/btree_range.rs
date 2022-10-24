@@ -33,50 +33,42 @@ impl<T> BTreeRange<T> {
     {
         // `start` should be an included bound
         let start = match range.start_bound().cloned() {
-            Bound::Excluded(n) => n + 1,
+            Bound::Excluded(n) => n.saturating_add(1),
             Bound::Included(n) => n,
             Bound::Unbounded => 0,
         };
         // `end` should be an excluded bound
         let end = match range.end_bound().cloned() {
             Bound::Excluded(n) => n,
-            Bound::Included(n) => n + 1,
+            Bound::Included(n) => n.saturating_add(1),
             Bound::Unbounded => usize::MAX,
         };
 
         self.btree.insert(start, RangeItem::new(value, end));
     }
 
-    pub fn get_offset_value(&self, index: usize) -> Option<(usize, &T)> {
+    pub fn get_offset_and_value(&self, index: usize) -> Option<(usize, &T)> {
         self.btree
             .range(..=index)
             .last()
             .and_then(|(start, RangeItem { data, end })| {
-                if index < *end {
-                    Some((index - *start, data))
-                } else {
-                    None
-                }
+                (index < *end).then_some((index - *start, data))
             })
     }
-    pub fn get_offset_value_mut(&mut self, index: usize) -> Option<(usize, &mut T)> {
+    pub fn get_offset_and_value_mut(&mut self, index: usize) -> Option<(usize, &mut T)> {
         self.btree
             .range_mut(..=index)
             .last()
             .and_then(|(start, RangeItem { data, end })| {
-                if index < *end {
-                    Some((index - *start, data))
-                } else {
-                    None
-                }
+                (index < *end).then_some((index - *start, data))
             })
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
-        self.get_offset_value(index).map(|(_, value)| value)
+        self.get_offset_and_value(index).map(|(_, value)| value)
     }
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.get_offset_value_mut(index).map(|(_, value)| value)
+        self.get_offset_and_value_mut(index).map(|(_, value)| value)
     }
     pub fn get_exact(&self, index: usize) -> Option<&T> {
         self.btree.get(&index).map(|value| &value.data)

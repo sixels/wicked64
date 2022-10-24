@@ -65,8 +65,8 @@ impl JitEngine {
 
     pub fn invalidate_cache(&mut self) {
         // ! TODO: delete entries from jump table too
-        if let Some((inv_start, inv_end)) = self.state.borrow_mut().cache_invalidation.take() {
-            self.cache.invalidate_range(inv_start, inv_end);
+        if let Some(inv_range) = self.state.borrow_mut().cache_invalidation.take() {
+            self.cache.invalidate_range(inv_range);
         }
     }
 

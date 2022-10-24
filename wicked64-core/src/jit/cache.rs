@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{ops::RangeInclusive, rc::Rc};
 
 use crate::utils::btree_range::BTreeRange;
 
@@ -23,9 +23,9 @@ impl Cache {
         block
     }
 
-    pub fn invalidate_range(&mut self, inv_start: usize, inv_end: usize) {
+    pub fn invalidate_range(&mut self, inv_range: RangeInclusive<usize>) {
         self.blocks
-            .retain(|(start, end), _| !(inv_start <= end && inv_end >= start));
+            .retain(|(start, end), _| !(inv_range.contains(&start) && inv_range.contains(&end)));
     }
 }
 

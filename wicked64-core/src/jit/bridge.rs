@@ -15,9 +15,9 @@ pub extern "C" fn mmu_store_qword(state: &mut State, virt_addr: u64, value: u64)
     let phys_addr = cpu.translate_virtual(virt_addr) as usize;
 
     // invalidate 8 bytes starting from `phys_addr`
-    *cache_invalidation = Some((phys_addr, phys_addr + 8 + 1));
+    *cache_invalidation = Some(phys_addr..=phys_addr + 8);
 
-    mmu.store::<_, byteorder::BigEndian>(phys_addr, rt);
+    mmu.store::<_, byteorder::BigEndian>(phys_addr, value);
 }
 
 pub extern "C" fn get_host_jump_addr(state: &mut State, jump_table: &mut JumpTable, n64_addr: u64) {

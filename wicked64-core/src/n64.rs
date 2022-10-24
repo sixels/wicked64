@@ -1,4 +1,4 @@
-use std::{cell::RefCell, marker::PhantomData, path::Path, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, ops::RangeInclusive, path::Path, rc::Rc};
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -80,7 +80,7 @@ impl<O: ByteOrder> N64<O> {
 pub struct State {
     pub mmu: MemoryManager,
     pub cpu: Cpu<BigEndian>,
-    pub cache_invalidation: Option<(usize, usize)>,
+    pub cache_invalidation: Option<RangeInclusive<usize>>,
     pub interruption: Interruption,
     pub resume_addr: u64,
 }
