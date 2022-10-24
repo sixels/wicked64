@@ -49,7 +49,7 @@ impl JitEngine {
 
             let (buf, len) = compiler.compile(cycles);
 
-            (CompiledBlock::new(buf, virtual_pc, len), len)
+            CompiledBlock::new(buf, virtual_pc, len)
         });
 
         tracing::debug!(

@@ -12,15 +12,14 @@ impl Cache {
     /// Get a compiled block from the cache or create if no entries were found
     pub fn get_or_insert_with<F>(&mut self, addr: usize, mut f: F) -> Rc<CompiledBlock>
     where
-        F: FnMut() -> (CompiledBlock, usize),
+        F: FnMut() -> CompiledBlock,
     {
         if let Some(block) = self.blocks.get_exact(addr) {
             return block.clone();
         }
 
-        let (block, len) = f();
-        let block = Rc::new(block);
-        self.blocks.insert(addr..=addr + len, block.clone());
+        let block = Rc::new(f());
+        self.blocks.insert(addr..=addr + block.len(), block.clone());
         block
     }
 
