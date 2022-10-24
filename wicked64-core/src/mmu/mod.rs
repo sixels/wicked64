@@ -14,7 +14,7 @@ use crate::io::Cartridge;
 
 #[enum_dispatch(MemoryUnit)]
 #[derive(Debug)]
-enum MemoryUnits {
+enum GenericMemoryUnit {
     BoxedSlice(Box<[u8]>),
     Cartridge,
 }
@@ -24,22 +24,18 @@ pub trait MemoryUnit {
     /// Read an integer `I` from address `addr`
     fn read<I, O>(&self, addr: usize) -> I
     where
-        I: MemInteger + Sized + Debug,
-        O: ByteOrder + Sized;
+        I: MemInteger,
+        O: ByteOrder;
 
     /// Store an integer `value` of type `I` into address `addr`
     fn store<I, O>(&mut self, addr: usize, value: I)
     where
-        I: MemInteger + Sized + Debug,
-        O: ByteOrder + Sized;
+        I: MemInteger,
+        O: ByteOrder;
 
     /// Copy `n` bytes from `src` to `dst`
-    fn copy_from(&mut self, dst: usize, src: usize, n: usize)
-    where
-        Self: Sized,
-    {
-        let _ = (dst, src, n);
-        unimplemented!()
+    fn copy_from(&mut self, dst: usize, src: usize, n: usize) {
+        self.buffer_mut().copy_within(src..src + n, dst);
     }
     /// Get a reference to the memory buffer
     fn buffer(&self) -> &[u8] {
@@ -54,18 +50,16 @@ pub trait MemoryUnit {
 impl MemoryUnit for Box<[u8]> {
     fn read<I, O>(&self, addr: usize) -> I
     where
-        Self: Sized,
-        I: MemInteger + Sized,
-        O: ByteOrder + Sized,
+        I: MemInteger,
+        O: ByteOrder,
     {
         I::read_from::<O>(&self[addr..addr + I::SIZE])
     }
 
     fn store<I, O>(&mut self, addr: usize, value: I)
     where
-        Self: Sized,
-        I: MemInteger + Sized,
-        O: ByteOrder + Sized,
+        I: MemInteger,
+        O: ByteOrder,
     {
         I::write_to::<O>(&mut self[addr..addr + I::SIZE], value);
     }

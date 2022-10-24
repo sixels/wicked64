@@ -1,6 +1,10 @@
+use std::fmt::Display;
+
 use byteorder::ByteOrder;
 
-pub trait MemInteger: Copy + Clone + Default + Ord + PartialOrd + Eq + PartialEq + Send {
+pub trait MemInteger:
+    Copy + Clone + Default + Ord + PartialOrd + Eq + PartialEq + Send + Sized + Display
+{
     const SIZE: usize;
 
     fn truncate_u64(n: u64) -> Self;
