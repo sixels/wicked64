@@ -25,6 +25,14 @@ impl CompiledBlock {
     pub fn ptr(&self) -> *const u8 {
         self.exec_buf.ptr()
     }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn start_pc(&self) -> u64 {
+        self.start_pc
+    }
 }
 
 #[derive(Clone)]
