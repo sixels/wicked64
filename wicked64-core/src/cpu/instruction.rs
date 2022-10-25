@@ -44,13 +44,32 @@ pub enum Instruction {
 
     ADDI(ImmediateType),
     ADDIU(ImmediateType),
+    ORI(ImmediateType),
+
     BNE(ImmediateType),
+    BGTZ(ImmediateType),
+    BGTLZ(ImmediateType),
+    BEQ(ImmediateType),
+    BLEZ(ImmediateType),
+    BLEZL(ImmediateType),
+    BEQL(ImmediateType),
+    BNEL(ImmediateType),
+    BGTZL(ImmediateType),
+
     J(JumpType),
     JAL(JumpType),
+
+    SW(ImmediateType),
+
     LUI(ImmediateType),
     LW(ImmediateType),
-    ORI(ImmediateType),
-    SW(ImmediateType),
+    LB(ImmediateType),
+    LH(ImmediateType),
+    LWL(ImmediateType),
+    LBU(ImmediateType),
+    LHU(ImmediateType),
+    LWR(ImmediateType),
+    LWU(ImmediateType),
 
     // Special instructions
     SpecialSLL(RegisterType),
@@ -245,13 +264,31 @@ impl TryFrom<u32> for Instruction {
             Ok(opcode) => match opcode {
                 Opcode::ADDI => Ok(Self::ADDI(ImmediateType::new(instruction))),
                 Opcode::ADDIU => Ok(Self::ADDIU(ImmediateType::new(instruction))),
+                Opcode::ORI => Ok(Self::ORI(ImmediateType::new(instruction))),
+
                 Opcode::BNE => Ok(Self::BNE(ImmediateType::new(instruction))),
+                Opcode::BEQ => Ok(Self::BEQ(ImmediateType::new(instruction))),
+                Opcode::BLEZ => Ok(Self::BLEZ(ImmediateType::new(instruction))),
+                Opcode::BGTZ => Ok(Self::BGTZ(ImmediateType::new(instruction))),
+                Opcode::BEQL => Ok(Self::BEQL(ImmediateType::new(instruction))),
+                Opcode::BNEL => Ok(Self::BNEL(ImmediateType::new(instruction))),
+                Opcode::BLEZL => Ok(Self::BLEZL(ImmediateType::new(instruction))),
+                Opcode::BGTZL => Ok(Self::BGTZL(ImmediateType::new(instruction))),
+
                 Opcode::J => Ok(Self::J(JumpType::new(instruction))),
                 Opcode::JAL => Ok(Self::JAL(JumpType::new(instruction))),
+
+                Opcode::SW => Ok(Self::SW(ImmediateType::new(instruction))),
+
                 Opcode::LUI => Ok(Self::LUI(ImmediateType::new(instruction))),
                 Opcode::LW => Ok(Self::LW(ImmediateType::new(instruction))),
-                Opcode::ORI => Ok(Self::ORI(ImmediateType::new(instruction))),
-                Opcode::SW => Ok(Self::SW(ImmediateType::new(instruction))),
+                Opcode::LB => Ok(Self::LB(ImmediateType::new(instruction))),
+                Opcode::LH => Ok(Self::LH(ImmediateType::new(instruction))),
+                Opcode::LWL => Ok(Self::LWL(ImmediateType::new(instruction))),
+                Opcode::LBU => Ok(Self::LBU(ImmediateType::new(instruction))),
+                Opcode::LHU => Ok(Self::LHU(ImmediateType::new(instruction))),
+                Opcode::LWR => Ok(Self::LWR(ImmediateType::new(instruction))),
+                Opcode::LWU => Ok(Self::LWU(ImmediateType::new(instruction))),
 
                 Opcode::SPECIAL => Self::decode_special(instruction),
                 Opcode::COP0 => Self::decode_cop0(instruction),
@@ -330,8 +367,8 @@ impl RegisterType {
 /// Refer to <https://www.zophar.net/fileuploads/2/10655uytsm/N64ops03.txt>
 #[repr(u8)]
 #[rustfmt::skip]
-#[allow(dead_code, non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromPrimitive)]
 enum Opcode {
     SPECIAL = 0b000_000,
     REGIMM  = 0b000_001,
