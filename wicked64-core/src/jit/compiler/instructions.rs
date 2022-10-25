@@ -158,6 +158,44 @@ impl<'jt> Compiler<'jt> {
     }
 
     /// ```txt
+    /// rt = rs + imm_i32
+    /// ```
+    pub(super) fn emit_addi(&mut self, inst: ImmediateType) -> Result {
+        let ImmediateType { rs, rt, imm, .. } = inst;
+
+        let rt = self.get_cpu_register(rt)?;
+        let rs = self.get_cpu_register(rs)?;
+
+        self.emitter.mov(code_asm::r14, imm as i16 as u32 as u64)?;
+        self.emitter.add_instruction(iced_x86::Instruction::with2(
+            iced_x86::Code::Add_r32_rm32,
+            iced_x86::Register::R14D,
+            iced_x86::Register::from(rs).full_register32(),
+        )?)?;
+        self.emitter.movsxd(rt, code_asm::r14d)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = rs + imm_u32
+    /// ```
+    pub(super) fn emit_addiu(&mut self, inst: ImmediateType) -> Result {
+        let ImmediateType { rs, rt, imm, .. } = inst;
+
+        let rt = self.get_cpu_register(rt)?;
+        let rs = self.get_cpu_register(rs)?;
+
+        self.emitter.mov(code_asm::r14, imm as i16 as u32 as u64)?;
+        self.emitter.add_instruction(iced_x86::Instruction::with2(
+            iced_x86::Code::Add_r32_rm32,
+            iced_x86::Register::R14D,
+            iced_x86::Register::from(rs).full_register32(),
+        )?)?;
+        self.emitter.mov(rt, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
     /// rt = rs | imm
     /// ```
     pub(super) fn emit_ori(&mut self, inst: ImmediateType) -> Result {
@@ -172,6 +210,7 @@ impl<'jt> Compiler<'jt> {
 
         Ok(AssembleStatus::Continue)
     }
+
     /// ```txt
     /// mmu.sw(rs + offset, rt)
     /// ```
@@ -270,29 +309,6 @@ impl<'jt> Compiler<'jt> {
         self.emitter.jmp(code_asm::r15)?;
 
         Ok(AssembleStatus::Branch)
-    }
-    /// ```txt
-    /// rt = rs + imm_u32
-    /// ```
-    pub(super) fn emit_addi(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rs, rt, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as i16 as u32 as u64)?;
-        self.emitter.add_instruction(iced_x86::Instruction::with2(
-            iced_x86::Code::Add_r32_rm32,
-            iced_x86::Register::R14D,
-            iced_x86::Register::from(rs).full_register32(),
-        )?)?;
-        self.emitter.add_instruction(iced_x86::Instruction::with2(
-            iced_x86::Code::Movsxd_r64_rm32,
-            iced_x86::Register::from(rt),
-            iced_x86::Register::R14D,
-        )?)?;
-
-        Ok(AssembleStatus::Continue)
     }
     /// ```txt
     /// if rs != rt { pc = pc + (offset_u32 << 2) }

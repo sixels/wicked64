@@ -139,8 +139,9 @@ impl<'jt> Compiler<'jt> {
         match instruction {
             Instruction::NOP => Ok(AssembleStatus::Continue),
 
-            Instruction::ORI(inst) => self.emit_ori(inst),
             Instruction::ADDI(inst) => self.emit_addi(inst),
+            Instruction::ADDIU(inst) => self.emit_addiu(inst),
+            Instruction::ORI(inst) => self.emit_ori(inst),
 
             Instruction::BNE(inst) => self.emit_bne(inst),
 
