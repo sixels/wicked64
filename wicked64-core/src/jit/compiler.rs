@@ -138,13 +138,26 @@ impl<'jt> Compiler<'jt> {
         tracing::debug!("Compiling {instruction:02x?}");
         match instruction {
             Instruction::NOP => Ok(AssembleStatus::Continue),
-            Instruction::LUI(inst) => self.emit_lui(inst),
+
             Instruction::ORI(inst) => self.emit_ori(inst),
-            Instruction::SW(inst) => self.emit_sw(inst),
             Instruction::ADDI(inst) => self.emit_addi(inst),
+
             Instruction::BNE(inst) => self.emit_bne(inst),
-            Instruction::JAL(inst) => self.emit_jal(inst),
+
             Instruction::J(inst) => self.emit_j(inst),
+            Instruction::JAL(inst) => self.emit_jal(inst),
+            Instruction::SpecialJR(inst) => self.emit_jr(inst),
+
+            Instruction::SW(inst) => self.emit_sw(inst),
+
+            Instruction::LUI(inst) => self.emit_lui(inst),
+            Instruction::LB(inst) => self.emit_lb(inst),
+            Instruction::LBU(inst) => self.emit_lbu(inst),
+            Instruction::LH(inst) => self.emit_lh(inst),
+            Instruction::LHU(inst) => self.emit_lhu(inst),
+            Instruction::LW(inst) => self.emit_lw(inst),
+            Instruction::LWU(inst) => self.emit_lwu(inst),
+
             _ => todo!("Instruction not implemented: {instruction:02x?}"),
         }
     }

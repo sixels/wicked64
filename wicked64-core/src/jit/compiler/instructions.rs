@@ -1,7 +1,7 @@
 use iced_x86::code_asm::{self, AsmRegister64, CodeAssembler};
 
 use crate::{
-    cpu::instruction::{ImmediateType, JumpType},
+    cpu::instruction::{ImmediateType, JumpType, RegisterType},
     jit::{bridge, Interruption},
 };
 
@@ -66,7 +66,7 @@ macro_rules! wrap_call {
 
 impl<'jt> Compiler<'jt> {
     /// ```txt
-    /// rt = immediate << 16
+    /// rt = imm << 16
     /// ```
     pub(super) fn emit_lui(&mut self, inst: ImmediateType) -> Result {
         let ImmediateType { rt, imm, .. } = inst;
@@ -77,8 +77,88 @@ impl<'jt> Compiler<'jt> {
 
         Ok(AssembleStatus::Continue)
     }
+
+    /// helper for `lX` and `lXu` instructions
+    fn emit_lx(
+        &mut self,
+        inst: ImmediateType,
+        f: impl FnOnce(&mut Self, u64) -> AssembleResult<()>,
+    ) -> AssembleResult<AsmRegister64> {
+        let ImmediateType { rt, rs, imm, .. } = inst;
+
+        let rs = self.get_cpu_register(rs)?;
+
+        self.emitter.mov(code_asm::r14, imm as i16 as u32 as u64)?;
+        self.emitter.add(code_asm::r14, rs)?;
+        f(self, self.state.state_ptr() as u64)?;
+        self.emitter.mov(code_asm::r14, code_asm::rax)?;
+
+        self.get_cpu_register(rt)
+    }
     /// ```txt
-    /// rt = rs | immediate
+    /// rt = mmu.rb(rs + imm) // sign-extended
+    /// ```
+    pub(super) fn emit_lb(&mut self, inst: ImmediateType) -> Result {
+        let rt = self.emit_lx(inst, |compiler, state_addr| {
+            wrap_call!(compiler, bridge::mmu_read_byte[val: state_addr, reg: code_asm::r14])
+        })?;
+        self.emitter.movsx(rt, code_asm::r14b)?;
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = mmu.rb(rs + imm)
+    /// ```
+    pub(super) fn emit_lbu(&mut self, inst: ImmediateType) -> Result {
+        let rt = self.emit_lx(inst, |compiler, state_addr| {
+            wrap_call!(compiler, bridge::mmu_read_byte[val: state_addr, reg: code_asm::r14])
+        })?;
+        self.emitter.movzx(rt, code_asm::r14b)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = mmu.rw(rs + imm) // sign-extended
+    /// ```
+    pub(super) fn emit_lh(&mut self, inst: ImmediateType) -> Result {
+        let rt = self.emit_lx(inst, |compiler, state_addr| {
+            wrap_call!(compiler, bridge::mmu_read_word[val: state_addr, reg: code_asm::r14])
+        })?;
+        self.emitter.movsx(rt, code_asm::r14w)?;
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = mmu.rw(rs + imm)
+    /// ```
+    pub(super) fn emit_lhu(&mut self, inst: ImmediateType) -> Result {
+        let rt = self.emit_lx(inst, |compiler, state_addr| {
+            wrap_call!(compiler, bridge::mmu_read_word[val: state_addr, reg: code_asm::r14])
+        })?;
+        self.emitter.movzx(rt, code_asm::r14w)?;
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = mmu.rd(rs + imm) // sign-extended
+    /// ```
+    pub(super) fn emit_lw(&mut self, inst: ImmediateType) -> Result {
+        let rt = self.emit_lx(inst, |compiler, state_addr|{
+            wrap_call!(compiler, bridge::mmu_read_dword[val: state_addr, reg: code_asm::r14])
+        })?;
+        self.emitter.movsxd(rt, code_asm::r14d)?;
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = mmu.rd(rs + imm)
+    /// ```
+    pub(super) fn emit_lwu(&mut self, inst: ImmediateType) -> Result {
+        let rt = self.emit_lx(inst, |compiler, state_addr|{
+            wrap_call!(compiler, bridge::mmu_read_dword[val: state_addr, reg: code_asm::r14])
+        })?;
+        self.emitter.mov(rt, code_asm::r14)?;
+        Ok(AssembleStatus::Continue)
+    }
+
+    /// ```txt
+    /// rt = rs | imm
     /// ```
     pub(super) fn emit_ori(&mut self, inst: ImmediateType) -> Result {
         let ImmediateType { rt, rs, imm, .. } = inst;
@@ -86,13 +166,14 @@ impl<'jt> Compiler<'jt> {
         let rt = self.get_cpu_register(rt)?;
         let rs = self.get_cpu_register(rs)?;
 
-        self.emitter.mov(rt, imm as u64)?;
-        self.emitter.or(rt, rs)?;
+        self.emitter.mov(code_asm::r14, imm as u64)?;
+        self.emitter.or(code_asm::r14, rs)?;
+        self.emitter.mov(rt, code_asm::r14)?;
 
         Ok(AssembleStatus::Continue)
     }
     /// ```txt
-    /// mmu[rs + offset] = rt
+    /// mmu.sw(rs + offset, rt)
     /// ```
     pub(super) fn emit_sw(&mut self, inst: ImmediateType) -> Result {
         let ImmediateType {
@@ -107,10 +188,11 @@ impl<'jt> Compiler<'jt> {
 
         let state_addr = self.state.state_ptr();
 
-        self.emitter.mov(code_asm::r14, offset as i16 as u64)?;
+        self.emitter
+            .mov(code_asm::r14, offset as i16 as u32 as u64)?;
         self.emitter.add(code_asm::r14, rs)?;
 
-        wrap_call!(self, bridge::mmu_store_qword[val: state_addr as u64, reg: code_asm::r14, reg: rt])?;
+        wrap_call!(self, bridge::mmu_store_dword[val: state_addr as u64, reg: code_asm::r14, reg: rt])?;
 
         // `mmu_store` might invalidate the current memory region
         Ok(AssembleStatus::InvalidateCache)
@@ -166,7 +248,31 @@ impl<'jt> Compiler<'jt> {
         Ok(AssembleStatus::Branch)
     }
     /// ```txt
-    /// rt = rs + immediate_u32
+    /// pc = rs
+    /// ```
+    pub(super) fn emit_jr(&mut self, inst: RegisterType) -> Result {
+        let RegisterType { rs, .. } = inst;
+
+        let jump_table_addr = self.jump_table as *mut _ as u64;
+
+        let rs = self.get_cpu_register(rs)?;
+        self.emitter.mov(code_asm::r15, rs)?;
+        wrap_call!(
+            self,
+            bridge::get_host_jump_addr[
+                val:  self.state.state_ptr() as u64,
+                val: jump_table_addr,
+                reg: code_asm::r15
+            ]
+        )?;
+        self.emit_interruption(Interruption::PrepareJump(0), Some(code_asm::r15))?;
+        // `resume` sets the jump address to r15
+        self.emitter.jmp(code_asm::r15)?;
+
+        Ok(AssembleStatus::Branch)
+    }
+    /// ```txt
+    /// rt = rs + imm_u32
     /// ```
     pub(super) fn emit_addi(&mut self, inst: ImmediateType) -> Result {
         let ImmediateType { rs, rt, imm, .. } = inst;
