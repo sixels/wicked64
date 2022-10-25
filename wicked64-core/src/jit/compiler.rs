@@ -33,7 +33,7 @@ enum AssembleError {
     Memory(#[from] region::Error),
     // TODO: implement an error enum for CPU errors
     #[error("Error interacting with the CPU")]
-    Cpu,
+    Cpu(#[from] anyhow::Error),
 }
 
 type AssembleResult<T> = Result<T, AssembleError>;
@@ -100,7 +100,7 @@ impl<'jt> Compiler<'jt> {
                 let instruction = state
                     .cpu
                     .fetch_instruction(&state.mmu, self.pc)
-                    .map_err(|_| AssembleError::Cpu)?;
+                    .map_err(AssembleError::Cpu)?;
 
                 total_cycles += instruction.cycles();
 
