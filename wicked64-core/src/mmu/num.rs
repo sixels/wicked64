@@ -1,9 +1,9 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use byteorder::ByteOrder;
 
 pub trait MemInteger:
-    Copy + Clone + Default + Ord + PartialOrd + Eq + PartialEq + Send + Sized + Display
+    Copy + Clone + Default + Ord + PartialOrd + Eq + PartialEq + Send + Sized + Display + Debug
 {
     const SIZE: usize;
 
@@ -23,6 +23,20 @@ impl MemInteger for u8 {
     }
     fn write_to<O: ByteOrder>(buf: &mut [u8], value: Self) {
         buf[0] = value;
+    }
+}
+
+impl MemInteger for u16 {
+    const SIZE: usize = 1;
+
+    fn truncate_u64(n: u64) -> Self {
+        n as u16
+    }
+    fn read_from<O: ByteOrder>(buf: &[u8]) -> Self {
+        O::read_u16(buf)
+    }
+    fn write_to<O: ByteOrder>(buf: &mut [u8], value: Self) {
+        O::write_u16(buf, value);
     }
 }
 
