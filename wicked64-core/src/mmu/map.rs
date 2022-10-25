@@ -8,13 +8,13 @@ pub mod addr_map {
 
     /// N64 virtual memory mapping
     ///
-    /// | Address Range           | Name  | Description                                |
-    /// | ----------------------- | ----- | ------------------------------------------ |
-    /// | 0x00000000..=0x7FFFFFFF | KUSEG | User segment. TLB mapped                   |
-    /// | 0x80000000..=0x9FFFFFFF | KSEG0 | Kernel segment 0. Direct mapped, cached.   |
-    /// | 0xA0000000..=0xBFFFFFFF | KSEG1 | Kernel segment 1. Direct mapped, no cache. |
-    /// | 0xC0000000..=0xDFFFFFFF | KSSEG | Kernel supervisor segment. TLB mapped.     |
-    /// | 0xE0000000..=0xFFFFFFFF | KSEG3 | Kernel segment 3. TLB mapped.              |
+    /// | Address Range               | Name  | Description                                |
+    /// | --------------------------- | ----- | ------------------------------------------ |
+    /// | `0x0000_0000..=0x7FFF_FFFF` | KUSEG | User segment. TLB mapped                   |
+    /// | `0x8000_0000..=0x9FFF_FFFF` | KSEG0 | Kernel segment 0. Direct mapped, cached.   |
+    /// | `0xA000_0000..=0xBFFF_FFFF` | KSEG1 | Kernel segment 1. Direct mapped, no cache. |
+    /// | `0xC000_0000..=0xDFFF_FFFF` | KSSEG | Kernel supervisor segment. TLB mapped.     |
+    /// | `0xE000_0000..=0xFFFF_FFFF` | KSEG3 | Kernel segment 3. TLB mapped.              |
     pub mod virt {
         use super::AddrRange;
 
