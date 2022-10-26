@@ -139,9 +139,16 @@ impl<'jt> Compiler<'jt> {
         match instruction {
             Instruction::NOP => Ok(AssembleStatus::Continue),
 
+            Instruction::SpecialAND(inst) => self.emit_and(inst),
+            Instruction::ANDI(inst) => self.emit_andi(inst),
+            Instruction::SpecialOR(inst) => self.emit_or(inst),
+            Instruction::ORI(inst) => self.emit_ori(inst),
+            Instruction::SpecialXOR(inst) => self.emit_xor(inst),
+            Instruction::XORI(inst) => self.emit_xori(inst),
+            Instruction::SpecialNOR(inst) => self.emit_nor(inst),
+
             Instruction::ADDI(inst) => self.emit_addi(inst),
             Instruction::ADDIU(inst) => self.emit_addiu(inst),
-            Instruction::ORI(inst) => self.emit_ori(inst),
 
             Instruction::BNE(inst) => self.emit_bne(inst),
 

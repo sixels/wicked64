@@ -157,6 +157,117 @@ impl<'jt> Compiler<'jt> {
         Ok(AssembleStatus::Continue)
     }
 
+    ///```txt
+    /// rd = rs & rt
+    ///```
+    pub(super) fn emit_and(&mut self, inst: RegisterType) -> Result {
+        let RegisterType { rd, rs, rt, .. } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rs = self.get_cpu_register(rs)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rs)?;
+        self.emitter.and(code_asm::r14, rt)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    ///```txt
+    /// rt = rs & imm
+    ///```
+    pub(super) fn emit_andi(&mut self, inst: ImmediateType) -> Result {
+        let ImmediateType { rt, rs, imm, .. } = inst;
+
+        let rt = self.get_cpu_register(rt)?;
+        let rs = self.get_cpu_register(rs)?;
+
+        self.emitter.mov(code_asm::r14, imm as u64)?;
+        self.emitter.and(code_asm::r14, rs)?;
+        self.emitter.mov(rt, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    ///```txt
+    /// rd = rs | rt
+    ///```
+    pub(super) fn emit_or(&mut self, inst: RegisterType) -> Result {
+        let RegisterType { rd, rs, rt, .. } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rs = self.get_cpu_register(rs)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rs)?;
+        self.emitter.or(code_asm::r14, rt)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rt = rs | imm
+    /// ```
+    pub(super) fn emit_ori(&mut self, inst: ImmediateType) -> Result {
+        let ImmediateType { rt, rs, imm, .. } = inst;
+
+        let rt = self.get_cpu_register(rt)?;
+        let rs = self.get_cpu_register(rs)?;
+
+        self.emitter.mov(code_asm::r14, imm as u64)?;
+        self.emitter.or(code_asm::r14, rs)?;
+        self.emitter.mov(rt, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    ///```txt
+    /// rd = rs ^ rt
+    ///```
+    pub(super) fn emit_xor(&mut self, inst: RegisterType) -> Result {
+        let RegisterType { rd, rs, rt, .. } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rs = self.get_cpu_register(rs)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rs)?;
+        self.emitter.xor(code_asm::r14, rt)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    ///```txt
+    /// rt = rs | imm
+    ///```
+    pub(super) fn emit_xori(&mut self, inst: ImmediateType) -> Result {
+        let ImmediateType { rt, rs, imm, .. } = inst;
+
+        let rt = self.get_cpu_register(rt)?;
+        let rs = self.get_cpu_register(rs)?;
+
+        self.emitter.mov(code_asm::r14, imm as u64)?;
+        self.emitter.xor(code_asm::r14, rs)?;
+        self.emitter.mov(rt, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    ///```txt
+    /// rd = !(rs | rt)
+    ///```
+    pub(super) fn emit_nor(&mut self, inst: RegisterType) -> Result {
+        let RegisterType { rd, rs, rt, .. } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rs = self.get_cpu_register(rs)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rs)?;
+        self.emitter.or(code_asm::r14, rt)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+        self.emitter.not(rd)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+
     /// ```txt
     /// rt = rs + imm_i32
     /// ```
@@ -191,21 +302,6 @@ impl<'jt> Compiler<'jt> {
             iced_x86::Register::R14D,
             iced_x86::Register::from(rs).full_register32(),
         )?)?;
-        self.emitter.mov(rt, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
-    }
-    /// ```txt
-    /// rt = rs | imm
-    /// ```
-    pub(super) fn emit_ori(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rt, rs, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as u64)?;
-        self.emitter.or(code_asm::r14, rs)?;
         self.emitter.mov(rt, code_asm::r14)?;
 
         Ok(AssembleStatus::Continue)

@@ -42,9 +42,12 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 pub enum Instruction {
     NOP,
 
+    ANDI(ImmediateType),
+    ORI(ImmediateType),
+    XORI(ImmediateType),
+
     ADDI(ImmediateType),
     ADDIU(ImmediateType),
-    ORI(ImmediateType),
 
     BNE(ImmediateType),
     BGTZ(ImmediateType),
@@ -262,9 +265,12 @@ impl TryFrom<u32> for Instruction {
         let opcode = Opcode::try_from((instruction >> 26) as u8);
         match opcode {
             Ok(opcode) => match opcode {
+                Opcode::ANDI => Ok(Self::ANDI(ImmediateType::new(instruction))),
+                Opcode::ORI => Ok(Self::ORI(ImmediateType::new(instruction))),
+                Opcode::XORI => Ok(Self::XORI(ImmediateType::new(instruction))),
+
                 Opcode::ADDI => Ok(Self::ADDI(ImmediateType::new(instruction))),
                 Opcode::ADDIU => Ok(Self::ADDIU(ImmediateType::new(instruction))),
-                Opcode::ORI => Ok(Self::ORI(ImmediateType::new(instruction))),
 
                 Opcode::BNE => Ok(Self::BNE(ImmediateType::new(instruction))),
                 Opcode::BEQ => Ok(Self::BEQ(ImmediateType::new(instruction))),
