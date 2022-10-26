@@ -164,94 +164,37 @@ impl<'jt> Compiler<'jt> {
     /// rd = rs & rt
     ///```
     pub(super) fn emit_and(&mut self, inst: RegisterType) -> Result {
-        let RegisterType { rd, rs, rt, .. } = inst;
-
-        let rd = self.get_cpu_register(rd)?;
-        let rs = self.get_cpu_register(rs)?;
-        let rt = self.get_cpu_register(rt)?;
-
-        self.emitter.mov(code_asm::r14, rs)?;
-        self.emitter.and(code_asm::r14, rt)?;
-        self.emitter.mov(rd, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_alu(self, inst, X86Opcode::And_rm32_r32, false)
     }
     ///```txt
     /// rt = rs & imm
     ///```
     pub(super) fn emit_andi(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rt, rs, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as u64)?;
-        self.emitter.and(code_asm::r14, rs)?;
-        self.emitter.mov(rt, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_alu_imm(self, inst, X86Opcode::And_rm32_r32, false)
     }
     ///```txt
     /// rd = rs | rt
     ///```
     pub(super) fn emit_or(&mut self, inst: RegisterType) -> Result {
-        let RegisterType { rd, rs, rt, .. } = inst;
-
-        let rd = self.get_cpu_register(rd)?;
-        let rs = self.get_cpu_register(rs)?;
-        let rt = self.get_cpu_register(rt)?;
-
-        self.emitter.mov(code_asm::r14, rs)?;
-        self.emitter.or(code_asm::r14, rt)?;
-        self.emitter.mov(rd, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_alu(self, inst, X86Opcode::Or_rm32_r32, false)
     }
     /// ```txt
     /// rt = rs | imm
     /// ```
     pub(super) fn emit_ori(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rt, rs, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as u64)?;
-        self.emitter.or(code_asm::r14, rs)?;
-        self.emitter.mov(rt, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_alu_imm(self, inst, X86Opcode::Or_rm32_r32, false)
     }
     ///```txt
     /// rd = rs ^ rt
     ///```
     pub(super) fn emit_xor(&mut self, inst: RegisterType) -> Result {
-        let RegisterType { rd, rs, rt, .. } = inst;
-
-        let rd = self.get_cpu_register(rd)?;
-        let rs = self.get_cpu_register(rs)?;
-        let rt = self.get_cpu_register(rt)?;
-
-        self.emitter.mov(code_asm::r14, rs)?;
-        self.emitter.xor(code_asm::r14, rt)?;
-        self.emitter.mov(rd, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_alu(self, inst, X86Opcode::Xor_rm32_r32, false)
     }
     ///```txt
     /// rt = rs | imm
     ///```
     pub(super) fn emit_xori(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rt, rs, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as u64)?;
-        self.emitter.xor(code_asm::r14, rs)?;
-        self.emitter.mov(rt, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_alu_imm(self, inst, X86Opcode::Xor_rm32_r32, false)
     }
     ///```txt
     /// rd = !(rs | rt)
@@ -275,61 +218,61 @@ impl<'jt> Compiler<'jt> {
     /// rd = rs + rt // signed
     /// ```
     pub(super) fn emit_add(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Add_r32_rm32, true)
+        emit_alu(self, inst, X86Opcode::Add_r32_rm32, true)
     }
     /// ```txt
     /// rt = rs + rt
     /// ```
     pub(super) fn emit_addu(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Add_r32_rm32, false)
+        emit_alu(self, inst, X86Opcode::Add_r32_rm32, false)
     }
     /// ```txt
     /// rt = rs + imm // signed
     /// ```
     pub(super) fn emit_addi(&mut self, inst: ImmediateType) -> Result {
-        emit_arith_imm(self, inst, X86Opcode::Add_r32_rm32, true)
+        emit_alu_imm(self, inst, X86Opcode::Add_r32_rm32, true)
     }
     /// ```txt
     /// rt = rs + imm
     /// ```
     pub(super) fn emit_addiu(&mut self, inst: ImmediateType) -> Result {
-        emit_arith_imm(self, inst, X86Opcode::Add_r32_rm32, false)
+        emit_alu_imm(self, inst, X86Opcode::Add_r32_rm32, false)
     }
     // ```txt
     /// rd = rs - rt // signed
     /// ```
     pub(super) fn emit_sub(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Sub_r32_rm32, true)
+        emit_alu(self, inst, X86Opcode::Sub_r32_rm32, true)
     }
     /// ```txt
     /// rt = rs - rt
     /// ```
     pub(super) fn emit_subu(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Sub_r32_rm32, false)
+        emit_alu(self, inst, X86Opcode::Sub_r32_rm32, false)
     }
     // ```txt
     /// rd = rs * rt // signed
     /// ```
     pub(super) fn emit_mult(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Imul_r32_rm32, true)
+        emit_alu(self, inst, X86Opcode::Imul_r32_rm32, true)
     }
     /// ```txt
     /// rt = rs * rt
     /// ```
     pub(super) fn emit_multu(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Mul_rm32, false)
+        emit_alu(self, inst, X86Opcode::Mul_rm32, false)
     }
     // ```txt
     /// rd = rs / rt // signed
     /// ```
     pub(super) fn emit_div(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Idiv_rm32, true)
+        emit_alu(self, inst, X86Opcode::Idiv_rm32, true)
     }
     /// ```txt
     /// rt = rs / rt
     /// ```
     pub(super) fn emit_divu(&mut self, inst: RegisterType) -> Result {
-        emit_arith(self, inst, X86Opcode::Div_rm32, false)
+        emit_alu(self, inst, X86Opcode::Div_rm32, false)
     }
 
     /// ```txt
@@ -639,7 +582,7 @@ impl<'jt> Compiler<'jt> {
     }
 }
 
-fn emit_arith(
+fn emit_alu(
     compiler: &mut Compiler,
     inst: RegisterType,
     arith_opcode: X86Opcode,
@@ -668,7 +611,7 @@ fn emit_arith(
     Ok(AssembleStatus::Continue)
 }
 
-fn emit_arith_imm(
+fn emit_alu_imm(
     compiler: &mut Compiler,
     inst: ImmediateType,
     arith_opcode: X86Opcode,
