@@ -274,6 +274,93 @@ impl<'jt> Compiler<'jt> {
     pub(super) fn emit_divu(&mut self, inst: RegisterType) -> Result {
         emit_alu(self, inst, X86Opcode::Div_rm32, false)
     }
+    /// ```txt
+    /// rd = rt << sa
+    /// ```
+    pub(super) fn emit_sll(&mut self, inst: RegisterType) -> Result {
+        let RegisterType {
+            rd,
+            rt,
+            shift_amount,
+            ..
+        } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rt)?;
+        // logical shift
+        self.emitter.shl(code_asm::r14d, shift_amount as u32)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rd = rt << rs
+    /// ```
+    pub(super) fn emit_sllv(&mut self, inst: RegisterType) -> Result {
+        // TODO: Check operand correctness
+        // logical shift
+        emit_alu(self, inst, X86Opcode::Shl_rm32_1, false)
+    }
+    /// ```txt
+    /// rd = rt >> sa
+    /// ```
+    pub(super) fn emit_sra(&mut self, inst: RegisterType) -> Result {
+        let RegisterType {
+            rd,
+            rt,
+            shift_amount,
+            ..
+        } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rt)?;
+        // arithmetic shift
+        self.emitter.sar(code_asm::r14d, shift_amount as u32)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rd = rt >> rs
+    /// ```
+    pub(super) fn emit_srav(&mut self, inst: RegisterType) -> Result {
+        // TODO: Check operand correctness
+        // arithmetic shift
+        emit_alu(self, inst, X86Opcode::Sar_rm32_1, false)
+    }
+    /// ```txt
+    /// rd = rt >> sa
+    /// ```
+    pub(super) fn emit_srl(&mut self, inst: RegisterType) -> Result {
+        let RegisterType {
+            rd,
+            rt,
+            shift_amount,
+            ..
+        } = inst;
+
+        let rd = self.get_cpu_register(rd)?;
+        let rt = self.get_cpu_register(rt)?;
+
+        self.emitter.mov(code_asm::r14, rt)?;
+        // logical shift
+        self.emitter.shr(code_asm::r14d, shift_amount as u32)?;
+        self.emitter.mov(rd, code_asm::r14)?;
+
+        Ok(AssembleStatus::Continue)
+    }
+    /// ```txt
+    /// rd = rt >> rs
+    /// ```
+    pub(super) fn emit_srlv(&mut self, inst: RegisterType) -> Result {
+        // TODO: Check operand correctness
+        // logical shift
+        emit_alu(self, inst, X86Opcode::Shr_rm32_1, false)
+    }
 
     /// ```txt
     /// mmu.sw(rs + offset, rt)
@@ -582,6 +669,7 @@ impl<'jt> Compiler<'jt> {
     }
 }
 
+/// rd = `arith_opcode`(rs, rt)
 fn emit_alu(
     compiler: &mut Compiler,
     inst: RegisterType,

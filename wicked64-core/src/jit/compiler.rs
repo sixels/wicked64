@@ -157,6 +157,12 @@ impl<'jt> Compiler<'jt> {
             Instruction::SpecialMULTU(inst) => self.emit_multu(inst),
             Instruction::SpecialDIV(inst) => self.emit_div(inst),
             Instruction::SpecialDIVU(inst) => self.emit_divu(inst),
+            Instruction::SpecialSLL(inst) => self.emit_sll(inst),
+            Instruction::SpecialSLLV(inst) => self.emit_sllv(inst),
+            Instruction::SpecialSRA(inst) => self.emit_sra(inst),
+            Instruction::SpecialSRAV(inst) => self.emit_srav(inst),
+            Instruction::SpecialSRL(inst) => self.emit_srl(inst),
+            Instruction::SpecialSRLV(inst) => self.emit_srlv(inst),
 
             Instruction::BNE(inst) => self.emit_bne(inst),
 
