@@ -364,7 +364,7 @@ impl RegisterType {
             rt: ((instruction >> 16) & 0x1f) as u8,
             rd: ((instruction >> 11) & 0x1f) as u8,
             shift_amount: ((instruction >> 6) & 0x1f) as u8,
-            funct: (instruction & 0x1f) as u8,
+            funct: (instruction & 0x3f) as u8,
         }
     }
 }
