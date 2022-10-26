@@ -1,4 +1,7 @@
-use iced_x86::code_asm::{self, AsmRegister64, CodeAssembler};
+use iced_x86::{
+    code_asm::{self, AsmRegister64, CodeAssembler},
+    Code as X86Opcode,
+};
 
 use crate::{
     cpu::instruction::{ImmediateType, JumpType, RegisterType},
@@ -269,42 +272,64 @@ impl<'jt> Compiler<'jt> {
     }
 
     /// ```txt
-    /// rt = rs + imm_i32
+    /// rd = rs + rt // signed
     /// ```
-    pub(super) fn emit_addi(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rs, rt, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as i16 as u32 as u64)?;
-        self.emitter.add_instruction(iced_x86::Instruction::with2(
-            iced_x86::Code::Add_r32_rm32,
-            iced_x86::Register::R14D,
-            iced_x86::Register::from(rs).full_register32(),
-        )?)?;
-        self.emitter.movsxd(rt, code_asm::r14d)?;
-
-        Ok(AssembleStatus::Continue)
+    pub(super) fn emit_add(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Add_r32_rm32, true)
     }
     /// ```txt
-    /// rt = rs + imm_u32
+    /// rt = rs + rt
+    /// ```
+    pub(super) fn emit_addu(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Add_r32_rm32, false)
+    }
+    /// ```txt
+    /// rt = rs + imm // signed
+    /// ```
+    pub(super) fn emit_addi(&mut self, inst: ImmediateType) -> Result {
+        emit_arith_imm(self, inst, X86Opcode::Add_r32_rm32, true)
+    }
+    /// ```txt
+    /// rt = rs + imm
     /// ```
     pub(super) fn emit_addiu(&mut self, inst: ImmediateType) -> Result {
-        let ImmediateType { rs, rt, imm, .. } = inst;
-
-        let rt = self.get_cpu_register(rt)?;
-        let rs = self.get_cpu_register(rs)?;
-
-        self.emitter.mov(code_asm::r14, imm as i16 as u32 as u64)?;
-        self.emitter.add_instruction(iced_x86::Instruction::with2(
-            iced_x86::Code::Add_r32_rm32,
-            iced_x86::Register::R14D,
-            iced_x86::Register::from(rs).full_register32(),
-        )?)?;
-        self.emitter.mov(rt, code_asm::r14)?;
-
-        Ok(AssembleStatus::Continue)
+        emit_arith_imm(self, inst, X86Opcode::Add_r32_rm32, false)
+    }
+    // ```txt
+    /// rd = rs - rt // signed
+    /// ```
+    pub(super) fn emit_sub(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Sub_r32_rm32, true)
+    }
+    /// ```txt
+    /// rt = rs - rt
+    /// ```
+    pub(super) fn emit_subu(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Sub_r32_rm32, false)
+    }
+    // ```txt
+    /// rd = rs * rt // signed
+    /// ```
+    pub(super) fn emit_mult(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Imul_r32_rm32, true)
+    }
+    /// ```txt
+    /// rt = rs * rt
+    /// ```
+    pub(super) fn emit_multu(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Mul_rm32, false)
+    }
+    // ```txt
+    /// rd = rs / rt // signed
+    /// ```
+    pub(super) fn emit_div(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Idiv_rm32, true)
+    }
+    /// ```txt
+    /// rt = rs / rt
+    /// ```
+    pub(super) fn emit_divu(&mut self, inst: RegisterType) -> Result {
+        emit_arith(self, inst, X86Opcode::Div_rm32, false)
     }
 
     /// ```txt
@@ -573,7 +598,7 @@ impl<'jt> Compiler<'jt> {
         // set the stack size
         if stack_size > 0 {
             self.emitter.add_instruction(iced_x86::Instruction::with2(
-                iced_x86::Code::Sub_rm64_imm32,
+                X86Opcode::Sub_rm64_imm32,
                 iced_x86::Register::RSP,
                 stack_size as u32,
             )?)?;
@@ -600,7 +625,7 @@ impl<'jt> Compiler<'jt> {
         // restore the stack
         if stack_size > 0 {
             self.emitter.add_instruction(iced_x86::Instruction::with2(
-                iced_x86::Code::Add_rm64_imm32,
+                X86Opcode::Add_rm64_imm32,
                 iced_x86::Register::RSP,
                 stack_size as u32,
             )?)?;
@@ -612,4 +637,63 @@ impl<'jt> Compiler<'jt> {
 
         Ok(())
     }
+}
+
+fn emit_arith(
+    compiler: &mut Compiler,
+    inst: RegisterType,
+    arith_opcode: X86Opcode,
+    signed: bool,
+) -> Result {
+    let RegisterType { rd, rs, rt, .. } = inst;
+
+    let rd = compiler.get_cpu_register(rd)?;
+    let rs = compiler.get_cpu_register(rs)?;
+    let rt = compiler.get_cpu_register(rt)?;
+
+    compiler.emitter.mov(code_asm::r14, rt)?;
+    compiler
+        .emitter
+        .add_instruction(iced_x86::Instruction::with2(
+            arith_opcode,
+            iced_x86::Register::R14D,
+            iced_x86::Register::from(rs).full_register32(),
+        )?)?;
+    if signed {
+        compiler.emitter.movsxd(rd, code_asm::r14d)?;
+    } else {
+        compiler.emitter.mov(rd, code_asm::r14)?;
+    }
+
+    Ok(AssembleStatus::Continue)
+}
+
+fn emit_arith_imm(
+    compiler: &mut Compiler,
+    inst: ImmediateType,
+    arith_opcode: X86Opcode,
+    signed: bool,
+) -> Result {
+    let ImmediateType { rs, rt, imm, .. } = inst;
+
+    let rt = compiler.get_cpu_register(rt)?;
+    let rs = compiler.get_cpu_register(rs)?;
+
+    compiler
+        .emitter
+        .mov(code_asm::r14, imm as i16 as u32 as u64)?;
+    compiler
+        .emitter
+        .add_instruction(iced_x86::Instruction::with2(
+            arith_opcode,
+            iced_x86::Register::R14D,
+            iced_x86::Register::from(rs).full_register32(),
+        )?)?;
+    if signed {
+        compiler.emitter.movsxd(rt, code_asm::r14d)?;
+    } else {
+        compiler.emitter.mov(rt, code_asm::r14)?;
+    }
+
+    Ok(AssembleStatus::Continue)
 }

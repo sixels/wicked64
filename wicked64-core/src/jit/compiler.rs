@@ -147,8 +147,16 @@ impl<'jt> Compiler<'jt> {
             Instruction::XORI(inst) => self.emit_xori(inst),
             Instruction::SpecialNOR(inst) => self.emit_nor(inst),
 
+            Instruction::SpecialADD(inst) => self.emit_add(inst),
+            Instruction::SpecialADDU(inst) => self.emit_addu(inst),
             Instruction::ADDI(inst) => self.emit_addi(inst),
             Instruction::ADDIU(inst) => self.emit_addiu(inst),
+            Instruction::SpecialSUB(inst) => self.emit_sub(inst),
+            Instruction::SpecialSUBU(inst) => self.emit_subu(inst),
+            Instruction::SpecialMULT(inst) => self.emit_mult(inst),
+            Instruction::SpecialMULTU(inst) => self.emit_multu(inst),
+            Instruction::SpecialDIV(inst) => self.emit_div(inst),
+            Instruction::SpecialDIVU(inst) => self.emit_divu(inst),
 
             Instruction::BNE(inst) => self.emit_bne(inst),
 
